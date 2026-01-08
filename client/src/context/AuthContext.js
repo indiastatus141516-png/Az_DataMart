@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect } from "react";
+import { getClientId } from "../services/clientId";
 
 export const AuthContext = createContext();
 
@@ -8,7 +9,11 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     (async () => {
-      const token = localStorage.getItem("token");
+      // ensure a session-scoped clientId exists for this tab so refresh is scoped to this tab
+      try {
+        getClientId();
+      } catch (e) {}
+      const token = sessionStorage.getItem("token");
       if (token) {
         try {
           const { authAPI } = await import("../services/api");
@@ -23,7 +28,7 @@ export const AuthProvider = ({ children }) => {
             const resp = await authAPI.refresh();
             const newToken = resp.data.token;
             if (newToken) {
-              localStorage.setItem("token", newToken);
+              sessionStorage.setItem("token", newToken);
               const me2 = await authAPI.me();
               setUser({ id: me2.data.id, role: me2.data.role });
             }
@@ -40,7 +45,7 @@ export const AuthProvider = ({ children }) => {
           const resp = await authAPI.refresh();
           const newToken = resp.data.token;
           if (newToken) {
-            localStorage.setItem("token", newToken);
+            sessionStorage.setItem("token", newToken);
             const me = await authAPI.me();
             setUser({ id: me.data.id, role: me.data.role });
           }
@@ -54,8 +59,8 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (token) => {
-    // Store token only. Role will be verified from backend.
-    localStorage.setItem("token", token);
+    // Store token per-tab (sessionStorage) only. Role will be verified from backend.
+    sessionStorage.setItem("token", token);
     try {
       const { authAPI } = await import("../services/api");
       const me = await authAPI.me();
@@ -68,14 +73,14 @@ export const AuthProvider = ({ children }) => {
         const resp = await authAPI.refresh();
         const newToken = resp.data.token;
         if (newToken) {
-          localStorage.setItem("token", newToken);
+          sessionStorage.setItem("token", newToken);
           const me2 = await authAPI.me();
           setUser({ id: me2.data.id, role: me2.data.role });
           return me2.data;
         }
       } catch (e) {
         // fallback: clear token
-        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
         throw e;
       }
     }
@@ -89,7 +94,7 @@ export const AuthProvider = ({ children }) => {
       // ignore
     }
     setUser(null);
-    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
   };
 
   const isAdmin = () => user?.role === "admin";

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getClientId } from "./clientId";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || "/api";
 
@@ -7,11 +8,17 @@ const api = axios.create({
   withCredentials: true, // allow sending/receiving httpOnly cookies
 });
 
-// Add token to requests
+// Add token and clientId to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  try {
+    const clientId = getClientId();
+    if (clientId) config.headers["X-Client-Id"] = clientId;
+  } catch (e) {
+    // ignore
   }
   return config;
 });
@@ -32,7 +39,7 @@ api.interceptors.response.use(
         const resp = await api.post("/auth/refresh");
         const newToken = resp.data.token;
         if (newToken) {
-          localStorage.setItem("token", newToken);
+          sessionStorage.setItem("token", newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
         }

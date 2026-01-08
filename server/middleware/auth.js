@@ -1,6 +1,11 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
+// Auth middleware
+// - Access tokens embed { userId, role }
+// - Access middleware validates token, ensures user exists and is approved before attaching `req.user`.
+// - `requireRole(role)` checks `req.user.role` (from DB) to enforce role-based access control.
+
 const auth = async (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
 

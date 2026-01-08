@@ -3,6 +3,7 @@ import { TextField, Button, Paper, Typography, Alert } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { authAPI } from "../services/api";
+import { getClientId } from "../services/clientId";
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -19,7 +20,8 @@ const Login = () => {
     setError("");
 
     try {
-      const response = await authAPI.login(formData);
+      const clientId = getClientId();
+      const response = await authAPI.login({ ...formData, clientId });
       // Store token only and verify role from backend
       const me = await login(response.data.token);
       if (me?.role === "admin") {

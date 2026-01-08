@@ -87,16 +87,20 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    const clientId = req.body?.clientId;
+
     const token = jwt.sign(
       { userId: user.userId, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "15m" }
     );
 
-    // Create refresh token (rotate on login)
+    // Create refresh token (rotate on login). Embed clientId when provided so refresh tokens are scoped to a tab/session.
     const refreshSecret =
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
-    const refreshToken = jwt.sign({ userId: user.userId }, refreshSecret, {
+    const refreshPayload = { userId: user.userId };
+    if (clientId) refreshPayload.clientId = clientId;
+    const refreshToken = jwt.sign(refreshPayload, refreshSecret, {
       expiresIn: "7d",
     });
 
@@ -151,7 +155,13 @@ exports.refreshToken = async (req, res) => {
     } catch (err) {
       return res.status(401).json({ message: "Invalid refresh token" });
     }
-1
+
+    // If the refresh token includes a clientId, require the same clientId to be provided
+    const clientIdHeader = req.header("x-client-id") || req.body?.clientId;
+    if (decoded.clientId && decoded.clientId !== clientIdHeader) {
+      return res.status(401).json({ message: "Invalid client" });
+    }
+
     // Check token against blacklist
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
     const revoked = await RevokedToken.findOne({ hash: tokenHash });
@@ -175,7 +185,9 @@ exports.refreshToken = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "15m" }
     );
-    const newRefreshToken = jwt.sign({ userId: user.userId }, refreshSecret, {
+    const newRefreshPayload = { userId: user.userId };
+    if (decoded.clientId) newRefreshPayload.clientId = decoded.clientId;
+    const newRefreshToken = jwt.sign(newRefreshPayload, refreshSecret, {
       expiresIn: "7d",
     });
 

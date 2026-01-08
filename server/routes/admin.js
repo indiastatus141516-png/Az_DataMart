@@ -14,6 +14,10 @@ const router = express.Router();
 
 const requireAdmin = requireRole("admin");
 
+// Backend protected route examples:
+// router.get('/secure', auth, requireAdmin, (req, res) => { res.json({ message: 'admin only' }) })
+// router.get('/profile', auth, (req, res) => { res.json({ userId: req.user.userId, role: req.user.role }) })
+
 // Route to get daily requirements based on user's purchase requests
 router.get("/daily-requirements/:userId", async (req, res) => {
   const userId = req.params.userId;
@@ -1588,11 +1592,9 @@ router.delete("/categories/:categoryId", requireAdmin, async (req, res) => {
     await session.abortTransaction();
     session.endSession();
     console.error("Error deleting category:", error);
-    res
-      .status(500)
-      .json({
-        message: "Failed to delete category and associated data requirements",
-      });
+    res.status(500).json({
+      message: "Failed to delete category and associated data requirements",
+    });
   }
 });
 

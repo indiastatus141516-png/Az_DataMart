@@ -3,6 +3,9 @@ import { Navigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 
 // Protects a route so only authenticated users can access. If "adminOnly" is true, only admins can access.
+// Usage examples:
+// <Route path="/admin/dashboard" element={<ProtectedRoute adminOnly={true}><AdminDashboard/></ProtectedRoute>} />
+// <Route path="/user/dashboard" element={<ProtectedRoute><UserDashboard/></ProtectedRoute>} />
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user, loading, isAdmin } = useContext(AuthContext);
 
