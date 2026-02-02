@@ -16,16 +16,34 @@ const app = express();
 // Middleware
 // ---------------------
 app.use(cookieParser());
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    credentials: true,
-  })
-);
+// Configure CORS to accept multiple known origins (supports comma-separated CLIENT_URL)
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000")
+  .split(",")
+  .map((o) => o.trim());
+const corsOptions = {
+  origin: function (origin, callback) {
+    // allow non-browser requests (curl, server-to-server) where origin is undefined
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
+    return callback(new Error("CORS policy: origin not allowed"));
+  },
+  credentials: true,
+  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "X-Client-Id",
+  ],
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
+// allow preflight for all routes
+app.options("/", cors(corsOptions));
 
 // Increase payload size limit to handle large JSON requests
-app.use(express.json({ limit: "10mb" })); // Accept JSON up to 10MB
-app.use(express.urlencoded({ limit: "10mb", extended: true }));
+app.use(express.json({ limit: "30mb" })); // Accept JSON up to 10MB
+app.use(express.urlencoded({ limit: "30mb", extended: true }));
 
 // 👇 Root Route for testing deployment
 app.get("/", (req, res) => {

@@ -113,10 +113,11 @@ exports.login = async (req, res) => {
     await user.save();
 
     // Send refresh token as httpOnly cookie
+    // For cross-site browser use (frontend hosted on other origin), set sameSite='none' and secure=true in production
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -264,7 +265,7 @@ exports.logout = async (req, res) => {
 
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      sameSite: "strict",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
       secure: process.env.NODE_ENV === "production",
     });
     res.json({ message: "Logged out" });
