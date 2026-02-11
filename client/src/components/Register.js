@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { TextField, Button, Paper, Typography, Alert } from '@mui/material';
+import { TextField, Button, Paper, Typography, Alert, Stack } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
 
 const Register = () => {
   const [formData, setFormData] = useState({ email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -68,9 +70,14 @@ const Register = () => {
           margin="normal"
           required
         />
-        <Button type="submit" fullWidth variant="contained" sx={{ mt: 2 }}>
-          Register
-        </Button>
+        <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+          <Button type="submit" variant="contained" sx={{ flex: 1 }}>
+            Register
+          </Button>
+          <Button variant="outlined" onClick={() => navigate('/login')}>
+            Already registered? Login
+          </Button>
+        </Stack>
       </form>
     </Paper>
   );
