@@ -1,5 +1,5 @@
 import React, { useState, useContext } from "react";
-import { TextField, Button, Paper, Typography, Alert } from "@mui/material";
+import { TextField, Button, Paper, Typography, Alert, Stack } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { authAPI } from "../services/api";
@@ -68,14 +68,14 @@ const Login = () => {
         <Button type="submit" fullWidth variant="contained" sx={{ mt: 2 }}>
           Login
         </Button>
-        <Button
-          fullWidth
-          variant="outlined"
-          sx={{ mt: 1 }}
-          onClick={() => navigate("/register")}
-        >
-          Register
-        </Button>
+        <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            New here?
+          </Typography>
+          <Button variant="outlined" size="small" onClick={() => navigate("/register")}>
+            Create an account
+          </Button>
+        </Stack>
       </form>
     </Paper>
   );
