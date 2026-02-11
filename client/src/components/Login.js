@@ -68,6 +68,14 @@ const Login = () => {
         <Button type="submit" fullWidth variant="contained" sx={{ mt: 2 }}>
           Login
         </Button>
+        <Button
+          fullWidth
+          variant="outlined"
+          sx={{ mt: 1 }}
+          onClick={() => navigate("/register")}
+        >
+          Register
+        </Button>
       </form>
     </Paper>
   );
