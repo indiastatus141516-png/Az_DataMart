@@ -17,7 +17,7 @@ const app = express();
 // ---------------------
 app.use(cookieParser());
 // Configure CORS to accept multiple known origins (supports comma-separated CLIENT_URL)
-const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000")
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000" ||"https://leadsdogwoods.online")
   .split(",")
   .map((o) => o.trim());
 const corsOptions = {

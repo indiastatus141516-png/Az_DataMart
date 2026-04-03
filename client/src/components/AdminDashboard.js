@@ -89,10 +89,6 @@ const AdminDashboard = () => {
   const [addFixedCategoryDialog, setAddFixedCategoryDialog] = useState({ open: false, name: '' });
   const [deleteFixedCategoryDialog, setDeleteFixedCategoryDialog] = useState({ open: false, category: null });
 
-  // Week picker for Daily Requirements (admin)
-  const [weekStart, setWeekStart] = useState(''); // yyyy-mm-dd
-  const [weekEnd, setWeekEnd] = useState(''); // yyyy-mm-dd
-
   const formatDate = (d) => {
     if (!d) return '';
     const dt = new Date(d);
@@ -110,6 +106,12 @@ const AdminDashboard = () => {
     friday.setDate(monday.getDate() + 4);
     return { start: formatDate(monday), end: formatDate(friday) };
   };
+
+  const initialWeek = getWeekRange(new Date());
+
+  // Week picker for Daily Requirements (admin)
+  const [weekStart, setWeekStart] = useState(initialWeek.start); // yyyy-mm-dd
+  const [weekEnd, setWeekEnd] = useState(initialWeek.end); // yyyy-mm-dd
 
   const shiftWeek = (days) => {
     if (!weekStart || !weekEnd) return;
@@ -145,9 +147,6 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     // Initialize week range to current Monday-Friday and load main data
-    const { start, end } = getWeekRange(new Date());
-    setWeekStart(start);
-    setWeekEnd(end);
     loadData();
   }, []);
 

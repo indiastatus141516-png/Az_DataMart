@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useContext } from 'react';
 import {
   Container, Typography, Grid, Card, CardContent, Button,
@@ -57,7 +56,6 @@ const UserDashboard = () => {
 
   const [dailyQuantity, setDailyQuantity] = useState(0);
   const [weekDialogOpen, setWeekDialogOpen] = useState(false);
-  // Generate next 6 weeks' Monday-Friday ranges
   const [selectedCategoryForWeek, setSelectedCategoryForWeek] = useState('');
   const [reorderDialogOpen, setReorderDialogOpen] = useState(false);
   const [completedDeliveries, setCompletedDeliveries] = useState([]);
@@ -66,6 +64,18 @@ const UserDashboard = () => {
   const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
   const [selectedWeekOption, setSelectedWeekOption] = useState('');
   const { user, logout } = useContext(AuthContext);
+  
+  const [dailyRequirementsState, setDailyRequirementsState] = useState({});
+  const [dailyRequirementsDates, setDailyRequirementsDates] = useState({});
+  const [downloadedButtons, setDownloadedButtons] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('downloadedButtons') || '{}');
+    } catch (e) {
+      return {};
+    }
+  });
+  const [requestDayAvailability, setRequestDayAvailability] = useState({});
+
   const generateWeekOptions = () => {
     const options = [];
     const today = new Date();
@@ -125,6 +135,7 @@ const UserDashboard = () => {
       setDailyRequirementsState(res.data.requirements || {});
       setDailyRequirementsDates(res.data.dates || {});
     } catch (err) {
+      console.error('Failed to load daily requirements:', err);
       // not fatal for users
     }
   };
@@ -136,41 +147,39 @@ const UserDashboard = () => {
     }
   }, [selectedWeek]);
 
-  const [dailyRequirementsState, setDailyRequirementsState] = useState({});
-  const [dailyRequirementsDates, setDailyRequirementsDates] = useState({});
-  const [downloadedButtons, setDownloadedButtons] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('downloadedButtons') || '{}');
-    } catch (e) {
-      return {};
-    }
-  });
-  const [requestDayAvailability, setRequestDayAvailability] = useState({});
-
   const loadCategories = async () => {
     try {
       const response = await dataAPI.getCategories();
+      // Ensure response.data is an array before processing
+      const rawData = Array.isArray(response.data) ? response.data : [];
+      
       // Normalize categories to a consistent shape: { id, name, count }
-      const cats = (response.data || []).map(c => ({
+      const cats = rawData.map(c => ({
         id: c.id || c._id || null,
         name: c.name || c._id || c.category || String(c),
         count: c.count || 0
       }));
+      
       setCategories(cats);
-      //
     } catch (err) {
+      console.error('Failed to load categories:', err);
       setError('Failed to load categories');
+      // Ensure categories remains an array even on error
+      setCategories([]);
     }
   };
 
   const loadRequests = async () => {
     try {
       const response = await purchaseAPI.getRequests();
-      setRequests(response.data);
+      const requestsData = Array.isArray(response.data) ? response.data : [];
+      setRequests(requestsData);
       // After loading requests, pre-fetch availability for each request's delivery days
-      fetchRequestsAvailability(response.data);
+      fetchRequestsAvailability(requestsData);
     } catch (err) {
+      console.error('Failed to load requests:', err);
       setError('Failed to load requests');
+      setRequests([]);
     }
   };
 
@@ -207,7 +216,9 @@ const UserDashboard = () => {
 
     try {
       await Promise.all(promises);
+      setRequestDayAvailability(next);
     } catch (e) {
+      console.error('Failed to fetch request availability:', e);
       // ignore - individual promises set availability
     }
   };
@@ -215,9 +226,12 @@ const UserDashboard = () => {
   const loadPurchased = async () => {
     try {
       const response = await purchaseAPI.getPurchased();
-      setPurchased(response.data);
+      const purchasedData = Array.isArray(response.data) ? response.data : [];
+      setPurchased(purchasedData);
     } catch (err) {
+      console.error('Failed to load purchased data:', err);
       setError('Failed to load purchased data');
+      setPurchased([]);
     }
   };
 
@@ -240,6 +254,7 @@ const UserDashboard = () => {
         }
       });
     } catch (err) {
+      console.error('Failed to load profile:', err);
       setError('Failed to load profile');
     }
   };
@@ -266,8 +281,6 @@ const UserDashboard = () => {
     }
   };
 
-
-
   const handleSaveProfile = async () => {
     try {
       const profileData = {};
@@ -292,6 +305,7 @@ const UserDashboard = () => {
       setIsEditing(false);
       loadProfile(); // Reload profile to reflect changes
     } catch (err) {
+      console.error('Failed to update profile:', err);
       setError('Failed to update profile');
     }
   };
@@ -302,6 +316,7 @@ const UserDashboard = () => {
       const response = await dataAPI.getPreview(category);
       setPreview(response.data);
     } catch (err) {
+      console.error('Failed to load preview:', err);
       setError('Failed to load preview');
     }
   };
@@ -322,6 +337,7 @@ const UserDashboard = () => {
       }
       loadRequests();
     } catch (err) {
+      console.error('Failed to submit request:', err);
       setError(err.response?.data?.message || 'Failed to submit request');
     }
   };
@@ -338,6 +354,7 @@ const UserDashboard = () => {
       loadRequests();
       loadPurchased();
     } catch (err) {
+      console.error('Payment processing failed:', err);
       setError('Payment processing failed');
     }
   };
@@ -381,32 +398,40 @@ const UserDashboard = () => {
       setSelectedWeek({ startDate: '', endDate: '' });
       setDailyQuantities({ mon: 0, tue: 0, wed: 0, thu: 0, fri: 0 });
       setSelectedCategoryForWeek('');
+      setSelectedWeekOption('');
     } catch (err) {
+      console.error('Failed to submit weekly request:', err);
       setError(err.response?.data?.message || 'Failed to submit weekly request');
     }
   };
 
   const handleDownloadData = (purchase) => {
-    // Prepare data for Excel export - use original metadata format
-    const data = purchase.dataItems.map(item => ({
-      ...item.metadata, // Spread original row data
-      Index: item.index
-    }));
+    try {
+      // Prepare data for Excel export - use original metadata format
+      const data = purchase.dataItems.map(item => ({
+        ...item.metadata, // Spread original row data
+        Index: item.index
+      }));
 
-    // Create worksheet
-    const ws = XLSX.utils.json_to_sheet(data);
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(data);
 
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Purchased Data');
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Purchased Data');
 
-    // Generate Excel file and download
-    XLSX.writeFile(wb, `purchased_data_${purchase._id.slice(-6)}.xlsx`);
+      // Generate Excel file and download
+      XLSX.writeFile(wb, `purchased_data_${purchase._id.slice(-6)}.xlsx`);
+      setSuccess('Data downloaded successfully');
+    } catch (err) {
+      console.error('Failed to download data:', err);
+      setError('Failed to download data');
+    }
   };
 
-  // Filter functions
-  const filteredRequests = requests.filter(req => {
-    const matchesSearch = req.category.toLowerCase().includes(searchTerm.toLowerCase());
+  // Filter functions with safety checks
+  const filteredRequests = Array.isArray(requests) ? requests.filter(req => {
+    const matchesSearch = req.category && req.category.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || req.status === statusFilter;
     const matchesDate = dateFilter === 'all' || (() => {
       const reqDate = new Date(req.createdAt);
@@ -419,10 +444,10 @@ const UserDashboard = () => {
       return true;
     })();
     return matchesSearch && matchesStatus && matchesDate;
-  });
+  }) : [];
 
-  const filteredPurchased = purchased.filter(purchase => {
-    const matchesSearch = purchase.dataItems.some(item =>
+  const filteredPurchased = Array.isArray(purchased) ? purchased.filter(purchase => {
+    const matchesSearch = Array.isArray(purchase.dataItems) && purchase.dataItems.some(item =>
       item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const matchesDate = dateFilter === 'all' || (() => {
@@ -436,7 +461,7 @@ const UserDashboard = () => {
       return true;
     })();
     return matchesSearch && matchesDate;
-  });
+  }) : [];
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -616,8 +641,8 @@ const UserDashboard = () => {
 
       <Container maxWidth="xl">
 
-        {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
-        {success && <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>{success}</Alert>}
+        {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError('')}>{error}</Alert>}
+        {success && <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
         {/* Tabbed Section */}
         <Card sx={{
@@ -753,7 +778,7 @@ const UserDashboard = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <Box>
                               <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                                {purchased.reduce((sum, p) => sum + p.dataItems.length, 0)}
+                                {purchased.reduce((sum, p) => sum + (Array.isArray(p.dataItems) ? p.dataItems.length : 0), 0)}
                               </Typography>
                               <Typography variant="body2" sx={{ opacity: 0.8 }}>
                                 Total Items Purchased
@@ -832,7 +857,7 @@ const UserDashboard = () => {
                   </Typography>
 
                   <Grid container spacing={3}>
-                    {categories.map((category) => (
+                    {(Array.isArray(categories) ? categories : []).map((category) => (
                       <Grid item xs={12} sm={6} md={3} key={category.id || category._id || category.name}>
                         <Card sx={{
                           borderRadius: 3,
@@ -856,7 +881,6 @@ const UserDashboard = () => {
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                               Weekly data delivery
                             </Typography>
-                            {/* Day buttons removed from category card to declutter UI; kept in Purchase Requests view */}
                             <Button
                               variant="contained"
                               fullWidth
@@ -1001,8 +1025,8 @@ const UserDashboard = () => {
                       Confirm Weekly Data Order
                     </DialogTitle>
                     <DialogContent>
-                          <Typography variant="h6" sx={{ mb: 2 }}>
-                        Category: {categories.find(c => c.name === selectedCategoryForWeek)?.name || 'Unknown'}
+                      <Typography variant="h6" sx={{ mb: 2 }}>
+                        Category: {(Array.isArray(categories) ? categories : []).find(c => c.name === selectedCategoryForWeek)?.name || 'Unknown'}
                       </Typography>
                       <Typography variant="body1" sx={{ mb: 3 }}>
                         Week: {selectedWeek.startDate} to {selectedWeek.endDate}
@@ -1181,7 +1205,7 @@ const UserDashboard = () => {
                               </TableCell>
                               <TableCell>
                                 {req.status === 'approved' && (
-                                  <Box sx={{ display: 'flex', gap: 1 }}>
+                                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                                     {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day, idx) => {
                                       const qty = req.dailyQuantities?.[day] || 0;
                                       if (!qty) return null;
@@ -1205,7 +1229,7 @@ const UserDashboard = () => {
                                               target.setDate(start.getDate() + idx);
                                               const iso = target.toISOString().split('T')[0];
 
-                                              // Always attempt allocation/download for this date — this ensures first downloader gets FIFO allocation
+                                              // Always attempt allocation/download for this date
                                               const p = await dataAPI.collectDaily({ date: iso });
                                               const allocations = p.data.allocations || [];
                                               const allocForReq = allocations.find(a => String(a.purchaseRequestId) === String(req._id));
@@ -1221,7 +1245,7 @@ const UserDashboard = () => {
                                               XLSX.writeFile(wb, `${req.category}_${label}_${iso}.xlsx`);
                                               setSuccess('Downloaded allocated data');
 
-                                              // mark as downloaded (persist in localStorage so color survives refresh)
+                                              // mark as downloaded
                                               const key = `${req._id}-${day}`;
                                               setDownloadedButtons(prev => {
                                                 const next = { ...prev, [key]: true };
@@ -1229,6 +1253,7 @@ const UserDashboard = () => {
                                                 return next;
                                               });
                                             } catch (err) {
+                                              console.error('Failed to download allocated data:', err);
                                               setError(err.response?.data?.message || 'Failed to download allocated data');
                                             }
                                           }}
@@ -1295,7 +1320,7 @@ const UserDashboard = () => {
                                 Purchase #{purchase._id.slice(-6)}
                               </Typography>
                               <Typography variant="body2" color="text.secondary">
-                                {new Date(purchase.purchasedAt).toLocaleDateString()} • {purchase.dataItems.length} items
+                                {new Date(purchase.purchasedAt).toLocaleDateString()} • {Array.isArray(purchase.dataItems) ? purchase.dataItems.length : 0} items
                               </Typography>
                             </Box>
                             <Box sx={{ textAlign: 'right' }}>
@@ -1334,7 +1359,7 @@ const UserDashboard = () => {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {purchase.dataItems.map((item) => (
+                                {(Array.isArray(purchase.dataItems) ? purchase.dataItems : []).map((item) => (
                                   <TableRow key={item.index} hover sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
                                     <TableCell>
                                       <Chip
@@ -1365,7 +1390,8 @@ const UserDashboard = () => {
                   )}
                 </Box>
                 }
-                // {/* Profile Tab */}
+
+                {/* Profile Tab */}
                 {activeTab === 4 && <Box sx={{ p: 3 }}>
                   <Typography variant="h5" sx={{ mb: 4, fontWeight: 'bold', color: 'primary.main' }}>
                     Profile Settings
@@ -1602,5 +1628,3 @@ const UserDashboard = () => {
 };
 
 export default UserDashboard;
-
-
