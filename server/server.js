@@ -49,19 +49,18 @@ app.get("/", (req, res) => {
 // ---------------------
 // MongoDB connection
 // ---------------------
-if (!process.env.MONGODB_URI) {
-  console.error("MONGODB_URI is not defined in environment variables");
-  process.exit(1);
-}
+const connectDatabase = async () => {
+  if (mongoose.connection.readyState === 1) return;
+  if (!process.env.MONGODB_URI) {
+    throw new Error("MONGODB_URI is not defined in environment variables");
+  }
+  await mongoose.connect(process.env.MONGODB_URI);
+};
 
-mongoose
-  .connect(process.env.MONGODB_URI)
+const dbInitPromise = connectDatabase()
   .then(async () => {
     console.log("MongoDB connected");
 
-    // ---------------------
-    // Create default admin user if not exists
-    // ---------------------
     const User = require("./models/User");
     const bcrypt = require("bcryptjs");
     const auth = require("./middleware/auth");
@@ -83,21 +82,28 @@ mongoose
       );
     }
 
-    // ---------------------
-    // Routes
-    // ---------------------
     app.use("/api/auth", require("./routes/auth"));
     app.use("/api/admin", auth, require("./routes/admin"));
     app.use("/api/data", auth, require("./routes/data"));
     app.use("/api/purchase", auth, require("./routes/purchase"));
     app.use("/api/profile", require("./routes/profile"));
-
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err);
-    process.exit(1);
   });
+
+app.use(async (req, res, next) => {
+  if (req.path === "/" || req.path === "/favicon.ico") return next();
+  try {
+    await dbInitPromise;
+    if (mongoose.connection.readyState !== 1) {
+      throw new Error("Database is not connected");
+    }
+    next();
+  } catch (err) {
+    console.error("DB unavailable", err);
+    res.status(500).json({ message: "Database unavailable" });
+  }
+});
+
+module.exports = app;
