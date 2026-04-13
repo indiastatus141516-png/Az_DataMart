@@ -39,6 +39,34 @@ const getDayQuantity = (dailyQuantities = {}, dayOfWeek = "") => {
   return 0;
 };
 
+const normalizeDateStart = (input) => {
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const normalizeDateEnd = (input) => {
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
+const collectAffectedRange = (requests = []) => {
+  let minStart = null;
+  let maxEnd = null;
+  for (const req of requests) {
+    const start = normalizeDateStart(req?.weekRange?.startDate);
+    const end = normalizeDateEnd(req?.weekRange?.endDate);
+    if (!start || !end) continue;
+    if (!minStart || start < minStart) minStart = start;
+    if (!maxEnd || end > maxEnd) maxEnd = end;
+  }
+  if (!minStart || !maxEnd) return null;
+  return { start: minStart, end: maxEnd };
+};
+
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -196,6 +224,7 @@ router.delete("/users/bulk/delete", requireAdmin, async (req, res) => {
       const requests = await PurchaseRequest.find({
         userId: { $in: ids },
       }).session(session);
+      const affectedRange = collectAffectedRange(requests);
 
       // For each request, delete DailyRequirement entries that were populated for that request (createdBy 'system')
       for (const req of requests) {
@@ -277,6 +306,18 @@ router.delete("/users/bulk/delete", requireAdmin, async (req, res) => {
       await session.commitTransaction();
       session.endSession();
 
+      // Rebuild affected range so all future/pending weekdays are recalculated correctly.
+      if (affectedRange) {
+        try {
+          await rebuildDailyRequirements(affectedRange.start, affectedRange.end);
+        } catch (rebuildErr) {
+          console.warn(
+            "Post-delete rebuild failed for bulk delete:",
+            rebuildErr.message
+          );
+        }
+      }
+
       res.json({
         message: `Deleted ${result.deletedCount} users and related data successfully`,
       });
@@ -313,6 +354,7 @@ router.delete("/users/:userId", requireAdmin, async (req, res) => {
       await Purchase.deleteMany({ userId }).session(session);
 
       const requests = await PurchaseRequest.find({ userId }).session(session);
+      const affectedRange = collectAffectedRange(requests);
 
       for (const req of requests) {
         try {
@@ -382,6 +424,18 @@ router.delete("/users/:userId", requireAdmin, async (req, res) => {
 
       await session.commitTransaction();
       session.endSession();
+
+      // Rebuild affected range so all future/pending weekdays are recalculated correctly.
+      if (affectedRange) {
+        try {
+          await rebuildDailyRequirements(affectedRange.start, affectedRange.end);
+        } catch (rebuildErr) {
+          console.warn(
+            `Post-delete rebuild failed for user ${userId}:`,
+            rebuildErr.message
+          );
+        }
+      }
 
       return res.json({
         message: `Deleted user ${userId} and related data successfully`,
