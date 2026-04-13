@@ -38,7 +38,9 @@ class DailyAllocationService {
   async allocateDailyData() {
     try {
       const today = new Date();
-      const dayOfWeek = today.toLocaleLowerCase('en-US', { weekday: 'long' });
+      const dayOfWeek = today
+        .toLocaleDateString('en-US', { weekday: 'long' })
+        .toLowerCase();
 
       // Only run Monday to Friday
       if (!['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(dayOfWeek)) {

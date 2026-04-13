@@ -14,6 +14,70 @@ const router = express.Router();
 
 const requireAdmin = requireRole("admin");
 
+const toLocalISODate = (input) => {
+  const d = new Date(input);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const dayAliases = {
+  monday: ["monday", "mon"],
+  tuesday: ["tuesday", "tue"],
+  wednesday: ["wednesday", "wed"],
+  thursday: ["thursday", "thu"],
+  friday: ["friday", "fri"],
+};
+
+const getDayQuantity = (dailyQuantities = {}, dayOfWeek = "") => {
+  const keys = dayAliases[dayOfWeek] || [dayOfWeek];
+  for (const key of keys) {
+    const value = Number(dailyQuantities?.[key] ?? 0);
+    if (value > 0) return value;
+  }
+  return 0;
+};
+
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+async function resolveCategoryName(categoryInput) {
+  const raw = (categoryInput || "").toString().trim();
+  if (!raw) return raw;
+
+  if (Category && Category.db?.readyState) {
+    if (Category.base.Types.ObjectId.isValid(raw)) {
+      const byId = await Category.findById(raw);
+      if (byId?.name) return byId.name;
+    }
+
+    const byCode = await Category.findOne({ id: raw });
+    if (byCode?.name) return byCode.name;
+
+    const byName = await Category.findOne({
+      name: { $regex: `^${escapeRegex(raw)}$`, $options: "i" },
+    });
+    if (byName?.name) return byName.name;
+  }
+
+  return raw;
+}
+
+async function normalizeRequestCategory(requestDoc, session = null) {
+  if (!requestDoc) return requestDoc;
+  const resolvedCategory = await resolveCategoryName(requestDoc.category);
+  if (resolvedCategory && resolvedCategory !== requestDoc.category) {
+    requestDoc.category = resolvedCategory;
+    if (session) {
+      await requestDoc.save({ session });
+    } else {
+      await requestDoc.save();
+    }
+  }
+  return requestDoc;
+}
+
 // Backend protected route examples:
 // router.get('/secure', auth, requireAdmin, (req, res) => { res.json({ message: 'admin only' }) })
 // router.get('/profile', auth, (req, res) => { res.json({ userId: req.user.userId, role: req.user.role }) })
@@ -144,7 +208,7 @@ router.delete("/users/bulk/delete", requireAdmin, async (req, res) => {
             const idx = (d.getDay() + 6) % 7; // convert Sunday(0) -> 6, Monday(1)->0,...
             const dayOfWeek = days[idx];
             if (!dayOfWeek) continue;
-            const qty = req.dailyQuantities?.[dayOfWeek] || 0;
+            const qty = getDayQuantity(req.dailyQuantities, dayOfWeek);
             if (qty > 0) {
               // Decrement the DailyRequirement quantity by this request's contribution and remove the contribution entry
               const dateOnly = new Date(d);
@@ -260,7 +324,7 @@ router.delete("/users/:userId", requireAdmin, async (req, res) => {
             const idx = (d.getDay() + 6) % 7;
             const dayOfWeek = days[idx];
             if (!dayOfWeek) continue;
-            const qty = req.dailyQuantities?.[dayOfWeek] || 0;
+            const qty = getDayQuantity(req.dailyQuantities, dayOfWeek);
             if (qty > 0) {
               const dateOnly = new Date(d);
               dateOnly.setHours(0, 0, 0, 0);
@@ -473,33 +537,55 @@ router.get("/purchase-requests", requireAdmin, async (req, res) => {
 router.put("/purchase-requests/:id", requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
-    const request = await PurchaseRequest.findByIdAndUpdate(
-      req.params.id,
+    const allowedStatuses = ["approved", "rejected"];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status value" });
+    }
+
+    // Idempotent state transition:
+    // only update when status actually changes so repeated "approve" clicks
+    // do not re-run downstream side effects.
+    const request = await PurchaseRequest.findOneAndUpdate(
+      { _id: req.params.id, status: { $ne: status } },
       { status },
       { new: true }
     );
 
     if (!request) {
-      return res.status(404).json({ message: "Request not found" });
+      const existing = await PurchaseRequest.findById(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ message: "Request not found" });
+      }
+      // No status transition happened (already at requested status).
+      // Return current request and skip side effects.
+      return res.json({
+        ...existing.toObject(),
+        statusTransitionApplied: false,
+      });
     }
 
-    // If approving, incrementally populate daily requirements for this request
-    // (do not run a global rebuild; we keep updates additive)
-    if (status === "approved") {
-      try {
-        await populateDailyRequirementsForRequest(request);
-      } catch (e) {
-        console.warn(
-          "Failed to populate daily requirements after approval:",
-          e.message
-        );
-      }
+    await normalizeRequestCategory(request);
 
-      // Allocate data specifically for this request (best-effort)
+    // Deterministic weekly rebuild keeps daily requirements consistent even if
+    // there were earlier duplicate clicks/retries.
+    try {
+      await rebuildDailyRequirements(
+        new Date(request.weekRange.startDate),
+        new Date(request.weekRange.endDate)
+      );
+    } catch (e) {
+      console.warn(
+        "Failed to rebuild daily requirements after request status update:",
+        e.message
+      );
+    }
+
+    // If approving, allocate data for this request once on real transition.
+    if (status === "approved") {
       await allocateDataForRequest(request);
     }
 
-    res.json(request);
+    res.json({ ...request.toObject(), statusTransitionApplied: true });
   } catch (error) {
     console.error("Purchase request update error:", error);
     res.status(500).json({ message: "Server error" });
@@ -953,7 +1039,7 @@ router.post("/daily-data/upload", requireAdmin, async (req, res) => {
       index: nextIndex++,
       metadata: {
         ...row,
-        deliveryDate: normalizedDate.toISOString().split("T")[0],
+        deliveryDate: toLocalISODate(normalizedDate),
         dayOfWeek: dayOfWeek.toLowerCase(),
       },
     }));
@@ -1025,7 +1111,11 @@ router.get("/daily-requirements", requireAdmin, async (req, res) => {
     requirementsData.forEach((r) => {
       const category = r.category;
       const dayOfWeek = r.dayOfWeek;
-      const quantity = r.quantity;
+      const contributionTotal = (r.contributions || []).reduce(
+        (sum, c) => sum + (Number(c.quantity) || 0),
+        0
+      );
+      const quantity = Math.max(Number(r.quantity) || 0, contributionTotal);
 
       if (!requirements[category]) {
         requirements[category] = {
@@ -1135,6 +1225,7 @@ router.put("/users/:userId/profile", requireAdmin, async (req, res) => {
 // Populate daily requirements for a purchase request
 async function populateDailyRequirementsForRequest(request) {
   try {
+    await normalizeRequestCategory(request);
     const startDate = new Date(request.weekRange.startDate);
     const endDate = new Date(request.weekRange.endDate);
     const daysOfWeek = ["monday", "tuesday", "wednesday", "thursday", "friday"];
@@ -1147,8 +1238,8 @@ async function populateDailyRequirementsForRequest(request) {
     ) {
       const dayOfWeek = daysOfWeek[date.getDay() - 1]; // getDay() returns 0 for Sunday, 1 for Monday, etc.
 
-      if (dayOfWeek && request.dailyQuantities[dayOfWeek] > 0) {
-        const qtyToAdd = Number(request.dailyQuantities[dayOfWeek]) || 0;
+      if (dayOfWeek && getDayQuantity(request.dailyQuantities, dayOfWeek) > 0) {
+        const qtyToAdd = getDayQuantity(request.dailyQuantities, dayOfWeek);
         if (qtyToAdd <= 0) continue;
 
         // Increment existing requirement quantity and record this request's contribution
@@ -1161,6 +1252,12 @@ async function populateDailyRequirementsForRequest(request) {
           date: dateOnly,
         });
         if (existing) {
+          const alreadyContributed = (existing.contributions || []).some(
+            (c) => String(c.purchaseRequestId) === String(request._id)
+          );
+          // Idempotency guard: this request/day/category was already applied.
+          if (alreadyContributed) continue;
+
           existing.quantity = (existing.quantity || 0) + qtyToAdd;
           existing.contributions = existing.contributions || [];
           existing.contributions.push({
@@ -1210,7 +1307,7 @@ async function rebuildDailyRequirements(startDate, endDate) {
 
     // Fetch all approved requests that overlap the range
     const requests = await PurchaseRequest.find({
-      status: "approved",
+      status: { $in: ["approved", "completed"] },
       "weekRange.startDate": { $lte: end },
       "weekRange.endDate": { $gte: start },
     });
@@ -1237,7 +1334,7 @@ async function rebuildDailyRequirements(startDate, endDate) {
         ];
         const dayOfWeek = days[dayIdx];
         if (!dayOfWeek) continue;
-        const qty = Number(req.dailyQuantities?.[dayOfWeek] || 0);
+        const qty = getDayQuantity(req.dailyQuantities, dayOfWeek);
         if (qty <= 0) continue;
 
         const key = dateOnly.toISOString().split("T")[0];
@@ -1346,11 +1443,12 @@ router.post("/daily-requirements/rebuild", requireAdmin, async (req, res) => {
 // Data allocation function
 async function allocateDataForRequest(request) {
   try {
+    await normalizeRequestCategory(request);
     const days = ["monday", "tuesday", "wednesday", "thursday", "friday"];
     const allocations = [];
 
     for (const day of days) {
-      const quantity = request.dailyQuantities[day];
+      const quantity = getDayQuantity(request.dailyQuantities, day);
       if (quantity > 0) {
         // Find daily requirement for this category and day
         const requirement = await DailyRequirement.findOne({
@@ -1408,13 +1506,16 @@ async function allocateDataForRequest(request) {
   }
 }
 
-// User endpoint: collect/ download today's allocated data (triggered by user's action button)
+// User endpoint: collect/ download daily allocated data (strictly one request/day/date)
 router.post("/users/collect-daily", auth, async (req, res) => {
   const userId = req.user.userId;
   try {
-    // Allow optional date override (ISO yyyy-mm-dd) to collect for a specific delivery date
-    const { date } = req.body || req.query || {};
-    // Parse `YYYY-MM-DD` into a local Date to avoid timezone shifts that make the dayOfWeek wrong.
+    const {
+      date,
+      purchaseRequestId,
+      dayOfWeek: requestedDayOfWeek,
+    } = req.body || req.query || {};
+
     const parseLocalDate = (dstr) => {
       if (!dstr) return new Date();
       const parts = String(dstr)
@@ -1423,7 +1524,18 @@ router.post("/users/collect-daily", auth, async (req, res) => {
       if (parts.length !== 3 || parts.some(isNaN)) return new Date(dstr);
       return new Date(parts[0], parts[1] - 1, parts[2]);
     };
+
     const targetDate = date ? parseLocalDate(date) : new Date();
+    if (Number.isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        purchaseRequestId: purchaseRequestId || null,
+        dayOfWeek: null,
+        date: null,
+        message: "Invalid date format. Expected yyyy-mm-dd",
+        deliveryStatus: "not_available",
+        allocations: [],
+      });
+    }
     targetDate.setHours(0, 0, 0, 0);
 
     const dayIdx = targetDate.getDay(); // 0=Sun,1=Mon...
@@ -1436,121 +1548,190 @@ router.post("/users/collect-daily", auth, async (req, res) => {
       "friday",
       "saturday",
     ];
-    const dayOfWeek = days[dayIdx];
+    const dayOfWeek = (requestedDayOfWeek || days[dayIdx] || "")
+      .toString()
+      .toLowerCase();
+    const responseBase = {
+      purchaseRequestId: purchaseRequestId || null,
+      dayOfWeek,
+      date: toLocalISODate(targetDate),
+    };
+    const buildResponse = (overrides = {}) => ({
+      ...responseBase,
+      deliveryStatus: "not_available",
+      allocations: [],
+      ...overrides,
+    });
+    const toAllocationPayload = (alloc) => ({
+      purchaseRequestId: alloc.purchaseRequestId,
+      dayOfWeek: alloc.dayOfWeek,
+      date: toLocalISODate(alloc.date),
+      category: alloc.category,
+      allocated: alloc.totalAllocated || 0,
+      data: alloc.allocatedData || [],
+    });
+
+    if (!purchaseRequestId) {
+      return res
+        .status(400)
+        .json(buildResponse({ message: "purchaseRequestId is required" }));
+    }
 
     const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday"];
     if (!validDays.includes(dayOfWeek)) {
-      return res
-        .status(400)
-        .json({ message: "No scheduled deliveries on this date" });
+      return res.status(400).json(
+        buildResponse({
+          message: "No scheduled deliveries on this date",
+        })
+      );
     }
 
-    // Fetch all approved purchase requests for this user, then filter by the targetDate using date-only comparison
-    const allApproved = await PurchaseRequest.find({
+    const dayStart = new Date(targetDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(targetDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    const isoDate = toLocalISODate(targetDate);
+    responseBase.date = isoDate;
+    responseBase.purchaseRequestId = purchaseRequestId;
+
+    const requestDoc = await PurchaseRequest.findOne({
+      _id: purchaseRequestId,
       userId,
-      status: "approved",
-    });
-    const requests = allApproved.filter((r) => {
-      try {
-        const s = new Date(r.weekRange.startDate);
-        const e = new Date(r.weekRange.endDate);
-        s.setHours(0, 0, 0, 0);
-        e.setHours(23, 59, 59, 999);
-        return targetDate >= s && targetDate <= e;
-      } catch (e) {
-        return false;
-      }
+      status: { $in: ["approved", "completed"] },
+      "weekRange.startDate": { $lte: dayEnd },
+      "weekRange.endDate": { $gte: dayStart },
     });
 
-    if (!requests.length) {
-      return res
-        .status(404)
-        .json({ message: "No active purchase requests for today" });
+    if (!requestDoc) {
+      return res.json(
+        buildResponse({ message: "No active purchase request for selected date" })
+      );
+    }
+
+    await normalizeRequestCategory(requestDoc);
+    const qty = getDayQuantity(requestDoc.dailyQuantities, dayOfWeek);
+    if (qty <= 0) {
+      return res.json(
+        buildResponse({ message: "No scheduled quantity for selected date" })
+      );
+    }
+
+    const existingFilter = {
+      userId,
+      purchaseRequestId: requestDoc._id,
+      dayOfWeek,
+      date: { $gte: dayStart, $lte: dayEnd },
+    };
+    const existingAllocation = await UserAllocatedData.findOne(existingFilter).lean();
+    if (existingAllocation) {
+      return res.json({
+        ...buildResponse(),
+        message: "Allocation already exists for selected date",
+        deliveryStatus: "already_allocated",
+        allocations: [toAllocationPayload(existingAllocation)],
+      });
     }
 
     const session = await PurchaseRequest.startSession();
     session.startTransaction();
 
     try {
-      const aggregatedAllocated = [];
-
-      const isoDate = targetDate.toISOString().split("T")[0];
-
-      for (const reqDoc of requests) {
-        const qty = reqDoc.dailyQuantities?.[dayOfWeek] || 0;
-        const alreadyDelivered = reqDoc.deliveriesCompleted?.[dayOfWeek];
-
-        if (qty <= 0 || alreadyDelivered) continue;
-
-        // Allocate from DataItem collection using the existing transaction/session for this delivery date
-        const allocated = await allocateDataItems(
-          reqDoc.category,
-          qty,
+      const locked = await PurchaseRequest.findOneAndUpdate(
+        {
+          _id: requestDoc._id,
           userId,
-          session,
-          { deliveryDate: isoDate, dayOfWeek }
+          [`deliveriesCompleted.${dayOfWeek}`]: { $ne: true },
+        },
+        { $set: { [`deliveriesCompleted.${dayOfWeek}`]: true } },
+        { new: true, session }
+      );
+
+      if (!locked) {
+        await session.commitTransaction();
+        session.endSession();
+
+        const latestExisting = await UserAllocatedData.findOne(existingFilter).lean();
+        if (latestExisting) {
+          return res.json({
+            ...buildResponse(),
+            message: "Allocation already exists for selected date",
+            deliveryStatus: "already_allocated",
+            allocations: [toAllocationPayload(latestExisting)],
+          });
+        }
+
+        return res.json(
+          buildResponse({ message: "No data available to download for selected date" })
         );
-
-        if (allocated === null) {
-          // concurrency conflict — skip this request so others may proceed
-          console.warn(
-            `Concurrency conflict while allocating for user ${userId} request ${reqDoc._id}`
-          );
-          continue;
-        }
-
-        if (!allocated || allocated.length === 0) {
-          // nothing allocated for this request today
-          continue;
-        }
-
-        // Create allocation record for user
-        const allocation = new UserAllocatedData({
-          userId,
-          category: reqDoc.category,
-          allocatedData: allocated,
-          date: new Date(),
-          status: "delivered",
-          totalAllocated: allocated.length,
-          purchaseRequestId: reqDoc._id,
-          dayOfWeek,
-        });
-
-        await allocation.save({ session });
-
-        // Mark delivery completed for this day if full allocation provided
-        if (allocated.length === qty) {
-          reqDoc.deliveriesCompleted = reqDoc.deliveriesCompleted || {};
-          reqDoc.deliveriesCompleted[dayOfWeek] = true;
-        }
-
-        await reqDoc.save({ session });
-
-        aggregatedAllocated.push({
-          purchaseRequestId: reqDoc._id,
-          category: reqDoc.category,
-          allocated: allocated.length,
-          data: allocated,
-        });
       }
+
+      const allocated = await allocateDataItems(
+        requestDoc.category,
+        qty,
+        userId,
+        session,
+        { deliveryDate: isoDate, dayOfWeek }
+      );
+
+      if (allocated === null || !Array.isArray(allocated) || allocated.length === 0) {
+        await PurchaseRequest.updateOne(
+          { _id: requestDoc._id },
+          { $set: { [`deliveriesCompleted.${dayOfWeek}`]: false } },
+          { session }
+        );
+        await session.commitTransaction();
+        session.endSession();
+        return res.json(
+          buildResponse({ message: "No data available to download for selected date" })
+        );
+      }
+
+      const allocation = new UserAllocatedData({
+        userId,
+        category: requestDoc.category,
+        allocatedData: allocated,
+        date: targetDate,
+        status: "delivered",
+        totalAllocated: allocated.length,
+        purchaseRequestId: requestDoc._id,
+        dayOfWeek,
+      });
+      await allocation.save({ session });
 
       await session.commitTransaction();
       session.endSession();
 
-      if (aggregatedAllocated.length === 0) {
-        return res
-          .status(404)
-          .json({ message: "No data available to download for today" });
-      }
-
-      // Return allocated data for user to download
       return res.json({
-        message: "Allocated data for today",
-        allocations: aggregatedAllocated,
+        ...buildResponse(),
+        message: "Allocated data for selected date",
+        deliveryStatus: "allocated_now",
+        allocations: [
+          {
+            purchaseRequestId: requestDoc._id,
+            dayOfWeek,
+            date: isoDate,
+            category: requestDoc.category,
+            allocated: allocated.length,
+            data: allocated,
+          },
+        ],
       });
     } catch (err) {
       await session.abortTransaction();
       session.endSession();
+
+      if (err?.code === 11000) {
+        const duplicateExisting = await UserAllocatedData.findOne(existingFilter).lean();
+        if (duplicateExisting) {
+          return res.json({
+            ...buildResponse(),
+            message: "Allocation already exists for selected date",
+            deliveryStatus: "already_allocated",
+            allocations: [toAllocationPayload(duplicateExisting)],
+          });
+        }
+      }
+
       console.error("Collect daily transaction error:", err);
       return res
         .status(500)
@@ -1561,7 +1742,6 @@ router.post("/users/collect-daily", auth, async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
-
 // Delete category and associated data requirements
 router.delete("/categories/:categoryId", requireAdmin, async (req, res) => {
   const categoryId = req.params.categoryId;
@@ -1601,3 +1781,4 @@ router.delete("/categories/:categoryId", requireAdmin, async (req, res) => {
 module.exports = router;
 // Export helper for external use (e.g., server startup rebuild)
 module.exports.rebuildDailyRequirements = rebuildDailyRequirements;
+

@@ -1,6 +1,7 @@
 const express = require('express');
 const PurchaseRequest = require('../models/PurchaseRequest');
 const Purchase = require('../models/Purchase');
+const UserAllocatedData = require('../models/UserAllocatedData');
 const DataItem = require('../models/DataItem');
 const User = require('../models/User');
 const Razorpay = require('razorpay');
@@ -14,6 +15,46 @@ const router = express.Router();
 
 // Initialize cache with 5 minutes TTL
 const cache = new NodeCache({ stdTTL: 300 });
+
+const parseLocalDate = (value) => {
+  if (!value) return null;
+  const parts = String(value).split("-").map((p) => parseInt(p, 10));
+  if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+async function resolveCategoryName(inputCategory, session = null) {
+  const Category = require("../models/Category");
+  let categoryName = (inputCategory || "").toString().trim();
+  if (!categoryName) return "";
+
+  try {
+    if (mongoose.Types.ObjectId.isValid(categoryName)) {
+      const byObjectId = await Category.findById(categoryName).session(session);
+      if (byObjectId?.name) return byObjectId.name;
+    }
+
+    const byCode = await Category.findOne({ id: categoryName }).session(session);
+    if (byCode?.name) return byCode.name;
+
+    const byExactName = await Category.findOne({ name: categoryName }).session(
+      session
+    );
+    if (byExactName?.name) return byExactName.name;
+
+    const byCaseInsensitive = await Category.findOne({
+      name: { $regex: `^${categoryName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+    }).session(session);
+    if (byCaseInsensitive?.name) return byCaseInsensitive.name;
+  } catch (err) {
+    console.warn("Category resolution warning:", err.message);
+  }
+
+  return categoryName;
+}
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -54,27 +95,20 @@ router.post('/request', auth, async (req, res) => {
       });
     }
 
-    // Resolve category to a category name if a fixed category ID or code was supplied
-    const Category = require('../models/Category');
-    let categoryName = category;
+    const categoryName = await resolveCategoryName(category, session);
+    if (!categoryName) {
+      return res.status(400).json({ message: "Category is required" });
+    }
 
-    try {
-      // If client provided a Category document _id
-      if (mongoose.Types.ObjectId.isValid(category)) {
-        const catDoc = await Category.findById(category).session(session);
-        if (catDoc) categoryName = catDoc.name;
-      }
-
-      // If client provided the category code (A,B,C...) or exact name
-      if (!categoryName || typeof categoryName === 'string') {
-        const byCode = await Category.findOne({ id: category }).session(session);
-        if (byCode) categoryName = byCode.name;
-
-        const byName = await Category.findOne({ name: categoryName }).session(session);
-        if (byName) categoryName = byName.name; // ensure exact normalized name
-      }
-    } catch (err) {
-      console.warn('Category resolution warning:', err.message);
+    const parsedStartDate = parseLocalDate(weekRange.startDate);
+    const parsedEndDate = parseLocalDate(weekRange.endDate);
+    if (!parsedStartDate || !parsedEndDate) {
+      return res.status(400).json({ message: "Invalid week range dates" });
+    }
+    parsedStartDate.setHours(0, 0, 0, 0);
+    parsedEndDate.setHours(23, 59, 59, 999);
+    if (parsedEndDate < parsedStartDate) {
+      return res.status(400).json({ message: "weekRange endDate cannot be before startDate" });
     }
 
     // Note: Do not block request creation if there is currently insufficient uploaded data.
@@ -89,11 +123,11 @@ router.post('/request', auth, async (req, res) => {
     const request = new PurchaseRequest({
       userId,
       quantity,
-      category,
+      category: categoryName,
       status: 'pending',
       weekRange: {
-        startDate: new Date(weekRange.startDate),
-        endDate: new Date(weekRange.endDate)
+        startDate: parsedStartDate,
+        endDate: parsedEndDate
       },
       dailyQuantities: {
         monday: dailyQuantities.monday || 0,
@@ -132,6 +166,13 @@ router.post('/request', auth, async (req, res) => {
 router.get('/requests', auth, async (req, res) => {
   try {
     const requests = await PurchaseRequest.find({ userId: req.user.userId });
+    for (const reqDoc of requests) {
+      const normalized = await resolveCategoryName(reqDoc.category);
+      if (normalized && normalized !== reqDoc.category) {
+        reqDoc.category = normalized;
+        await reqDoc.save();
+      }
+    }
     res.json(requests);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -141,8 +182,61 @@ router.get('/requests', auth, async (req, res) => {
 // Get user's purchased data
 router.get('/purchased', auth, async (req, res) => {
   try {
-    const purchases = await Purchase.find({ userId: req.user.userId });
-    res.json(purchases);
+    const userId = req.user.userId;
+    const purchases = await Purchase.find({ userId }).lean();
+
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(end.getDate() - 7);
+    start.setHours(0, 0, 0, 0);
+
+    const startIso = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+    const endIso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+
+    const allocations = await UserAllocatedData.find({
+      userId,
+      $or: [
+        { date: { $gte: start, $lte: end } },
+        { createdAt: { $gte: start, $lte: end } },
+        { "allocatedData.metadata.deliveryDate": { $gte: startIso, $lte: endIso } },
+      ],
+    })
+      .sort({ date: -1, createdAt: -1 })
+      .lean();
+
+    const allocationAsPurchases = allocations.map((alloc) => {
+      const firstDeliveryDate =
+        alloc?.allocatedData?.[0]?.metadata?.deliveryDate || null;
+      const purchasedAt = firstDeliveryDate
+        ? new Date(`${firstDeliveryDate}T00:00:00`)
+        : alloc.date || alloc.createdAt;
+
+      return {
+        _id: `alloc_${alloc._id}`,
+        userId: alloc.userId,
+        dataItems: (alloc.allocatedData || []).map((item, idx) => ({
+          index: item?.index ?? idx + 1,
+          category: alloc.category,
+          metadata: item?.metadata || item,
+        })),
+        purchasedAt,
+        paymentStatus: 'completed',
+        paymentId: `allocated_${alloc.purchaseRequestId}_${alloc.dayOfWeek}`,
+        transactionDetails: {
+          source: 'allocation',
+          purchaseRequestId: alloc.purchaseRequestId,
+          dayOfWeek: alloc.dayOfWeek,
+        },
+      };
+    });
+
+    const combined = [...allocationAsPurchases, ...purchases].sort(
+      (a, b) =>
+        new Date(b.purchasedAt || b.createdAt) -
+        new Date(a.purchasedAt || a.createdAt)
+    );
+    res.json(combined);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

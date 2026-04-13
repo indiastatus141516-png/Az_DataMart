@@ -47,5 +47,9 @@ const userAllocatedDataSchema = new mongoose.Schema({
 userAllocatedDataSchema.index({ userId: 1, date: 1 });
 userAllocatedDataSchema.index({ category: 1, date: 1 });
 userAllocatedDataSchema.index({ purchaseRequestId: 1, dayOfWeek: 1 });
+userAllocatedDataSchema.index(
+  { purchaseRequestId: 1, dayOfWeek: 1, date: 1, userId: 1 },
+  { unique: true }
+);
 
 module.exports = mongoose.model('UserAllocatedData', userAllocatedDataSchema);

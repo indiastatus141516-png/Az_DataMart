@@ -14,6 +14,14 @@ const router = express.Router();
 
 const requireAdmin = requireRole("admin");
 
+const toLocalISODate = (input) => {
+  const d = new Date(input);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 // Configure multer for file upload
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
@@ -46,12 +54,10 @@ router.post(
       }
 
       if (!categoryDoc) {
-        return res
-          .status(404)
-          .json({
-            message:
-              "Category not found. Please set a name for this category first.",
-          });
+        return res.status(404).json({
+          message:
+            "Category not found. Please set a name for this category first.",
+        });
       }
 
       // Parse Excel file
@@ -101,7 +107,7 @@ router.post(
             index: nextIndex++,
             metadata: {
               ...row,
-              deliveryDate: normalizedDate.toISOString().split("T")[0],
+              deliveryDate: toLocalISODate(normalizedDate),
               dayOfWeek: dayOfWeek.toLowerCase(),
             },
           }));
@@ -128,7 +134,7 @@ router.post(
                   )?.quantity || 0,
               },
             },
-            { upsert: true, new: true }
+            { upsert: true, new: true },
           );
 
           // If requirement has a quantity and we now meet or exceed it, trigger allocation for today
@@ -193,7 +199,7 @@ router.post(
         .status(500)
         .json({ message: `Failed to upload data: ${error.message}` });
     }
-  }
+  },
 );
 
 // Get available data categories and counts
@@ -354,7 +360,11 @@ router.get("/daily-requirements", auth, async (req, res) => {
       }
 
       const day = r.dayOfWeek;
-      const qty = r.quantity || 0;
+      const contributionTotal = (r.contributions || []).reduce(
+        (sum, c) => sum + (Number(c.quantity) || 0),
+        0,
+      );
+      const qty = Math.max(Number(r.quantity) || 0, contributionTotal);
       // Count uploaded DataItems for this requirement date/category
       const DataItem = require("../models/DataItem");
       const isoDate = new Date(r.date).toISOString().split("T")[0];
@@ -415,10 +425,10 @@ router.get("/daily-requirements", auth, async (req, res) => {
       monday: formatDate(monday),
       tuesday: formatDate(new Date(monday.getTime() + 1 * 24 * 60 * 60 * 1000)),
       wednesday: formatDate(
-        new Date(monday.getTime() + 2 * 24 * 60 * 60 * 1000)
+        new Date(monday.getTime() + 2 * 24 * 60 * 60 * 1000),
       ),
       thursday: formatDate(
-        new Date(monday.getTime() + 3 * 24 * 60 * 60 * 1000)
+        new Date(monday.getTime() + 3 * 24 * 60 * 60 * 1000),
       ),
       friday: formatDate(friday),
     };
@@ -441,9 +451,8 @@ router.get("/daily-data", auth, async (req, res) => {
 
     // Query DataItem documents that were uploaded for this delivery date
     const reqDate = new Date(date);
-    const isoDate = new Date(reqDate.setHours(0, 0, 0, 0))
-      .toISOString()
-      .split("T")[0];
+    reqDate.setHours(0, 0, 0, 0);
+    const isoDate = toLocalISODate(reqDate);
     const DataItem = require("../models/DataItem");
 
     const items = await DataItem.find({
@@ -454,9 +463,7 @@ router.get("/daily-data", auth, async (req, res) => {
     }).sort({ index: 1 });
 
     if (!items || items.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No uploaded data found for this category/day" });
+      return res.json({ uploadedData: [] });
     }
 
     // Return the original row metadata to the client for download

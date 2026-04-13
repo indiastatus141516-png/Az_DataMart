@@ -45,5 +45,9 @@ const dailyRequirementSchema = new mongoose.Schema({
 // Compound indexes for efficient queries
 dailyRequirementSchema.index({ category: 1, date: 1 });
 dailyRequirementSchema.index({ dayOfWeek: 1, date: 1 });
+dailyRequirementSchema.index(
+  { category: 1, dayOfWeek: 1, date: 1 },
+  { unique: true }
+);
 
 module.exports = mongoose.model('DailyRequirement', dailyRequirementSchema);

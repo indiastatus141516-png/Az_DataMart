@@ -1,0 +1,325 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: "Sora", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+      sans-serif;
+    line-height: 1.4;
+    font-weight: 400;
+    color: #1a1a2e;
+    background-color: #f0f2f8;
+  }
+
+  body {
+    @apply text-text-primary;
+    background: radial-gradient(circle at 8% 6%, rgba(108, 71, 217, 0.14), transparent 44%),
+      radial-gradient(circle at 88% 10%, rgba(56, 189, 248, 0.12), transparent 40%),
+      #f0f2f8;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: "Sora", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+      sans-serif;
+  }
+}
+
+@layer components {
+  .crm-page {
+    @apply space-y-6;
+  }
+
+  .crm-section {
+    @apply rounded-3xl border border-border bg-bg-card p-6 shadow-card;
+  }
+
+  .crm-eyebrow {
+    @apply text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted;
+  }
+
+  .crm-title {
+    @apply mt-2 text-2xl font-ui font-semibold text-text-primary sm:text-3xl;
+  }
+
+  .crm-subtitle {
+    @apply mt-2 text-sm text-text-secondary;
+  }
+
+  .crm-actions {
+    @apply flex flex-wrap items-center gap-3;
+  }
+
+  .crm-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] transition focus:outline-none focus:ring-2 focus:ring-accent-primary/60;
+  }
+
+  .crm-btn-primary {
+    @apply bg-accent-primary text-white hover:scale-[1.02] hover:shadow-glow;
+  }
+
+  .crm-btn-outline {
+    @apply border border-accent-primary/40 bg-bg-card text-accent-primary hover:border-accent-primary hover:bg-bg-hover;
+  }
+
+  .crm-btn-success {
+    @apply bg-accent-success text-white hover:scale-[1.02] hover:shadow-[0_0_16px_rgba(34,197,94,0.35)];
+  }
+
+  .crm-btn-warning {
+    @apply bg-accent-warning text-white hover:scale-[1.02] hover:shadow-[0_0_16px_rgba(245,158,11,0.35)];
+  }
+
+  .crm-btn-danger {
+    @apply bg-accent-danger text-text-primary hover:scale-[1.02] hover:shadow-[0_0_16px_rgba(239,68,68,0.35)];
+  }
+
+  .crm-btn-ghost {
+    @apply border border-border bg-bg-card text-text-secondary hover:border-accent-primary/40 hover:text-text-primary;
+  }
+
+  .crm-btn-sharp {
+    @apply rounded-md;
+  }
+
+  .crm-tab {
+    @apply flex items-center gap-2 rounded-lg border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] transition;
+  }
+
+  .crm-tab-active {
+    @apply border-accent-primary/40 bg-bg-card text-accent-primary shadow-[0_0_16px_rgba(124,58,237,0.18)];
+  }
+
+  .crm-tab-idle {
+    @apply border-transparent bg-transparent text-text-secondary hover:border-border hover:bg-bg-hover;
+  }
+
+  .crm-stat {
+    @apply h-full w-full rounded-xl border border-[#d9d5ff] bg-[#f0eeff] shadow-sm;
+  }
+
+  .crm-card {
+    @apply rounded-2xl border border-border bg-bg-card shadow-card;
+  }
+
+  .crm-card-body {
+    @apply p-4 sm:p-5;
+  }
+
+  .crm-mini-stat {
+    @apply h-full w-full rounded-2xl border border-border bg-bg-card px-4 py-4;
+  }
+
+  .crm-table {
+    @apply w-full min-w-full table-auto text-left text-sm;
+  }
+
+  .crm-thead {
+    @apply bg-[#EEF2FF] text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6B78A0];
+  }
+
+  .crm-thead .crm-cell {
+    @apply text-[#6B78A0];
+  }
+
+  .crm-row {
+    @apply relative border-b border-border transition-colors;
+  }
+
+  .crm-row-hover {
+    @apply hover:bg-[#F3F6FF];
+  }
+
+  .crm-row-hover::before {
+    content: "";
+    @apply absolute left-0 top-0 h-full w-[3px] bg-accent-primary opacity-0 transition-opacity;
+  }
+
+  .crm-row-hover:hover::before {
+    @apply opacity-100;
+  }
+
+  .crm-cell {
+    @apply px-4 py-3 align-middle text-sm text-text-primary;
+  }
+
+  .crm-cell-head {
+    @apply px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4A5578];
+  }
+
+  .crm-filter {
+    @apply flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card p-4;
+  }
+
+  .crm-field {
+    @apply w-full rounded-lg border border-border bg-bg-card px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/50;
+  }
+
+  .crm-field-ghost {
+    @apply border-transparent bg-bg-card focus:border-accent-primary;
+  }
+
+  .crm-dialog {
+    @apply rounded-2xl bg-bg-card p-6 shadow-glow;
+  }
+
+  .crm-dialog-title {
+    @apply text-lg font-semibold text-text-primary;
+  }
+
+  .crm-dialog-actions {
+    @apply mt-5 flex flex-wrap justify-end gap-3;
+  }
+
+  .crm-badge {
+    @apply inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em];
+  }
+
+  .crm-badge-success {
+    @apply border-accent-success/30 bg-[#0F2A1A] text-accent-success;
+  }
+
+  .crm-badge-warning {
+    @apply border-accent-warning/30 bg-[#2A1F0A] text-accent-warning;
+  }
+
+  .crm-badge-danger {
+    @apply border-accent-danger/30 bg-[#2A0A0A] text-accent-danger;
+  }
+
+  .crm-badge-neutral {
+    @apply border-border bg-bg-hover text-text-secondary;
+  }
+
+  .crm-sidebar {
+    @apply relative w-[220px] border-l border-[#1A1E26] bg-bg-sidebar px-5 py-6;
+  }
+
+  .crm-sidebar::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0 opacity-20;
+    background-image: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px
+    );
+    background-size: 100% 6px;
+  }
+
+  .crm-topbar {
+    @apply sticky top-0 z-10 flex h-[52px] items-center justify-between border-b border-border bg-white/90 px-6 backdrop-blur;
+  }
+
+  .crm-kpi {
+    @apply font-display text-[40px] leading-[1.1] text-text-primary sm:text-[52px] lg:text-[64px];
+  }
+
+  .crm-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted;
+  }
+
+  .crm-nav-item {
+    @apply group relative flex items-center gap-3 rounded-full border border-transparent px-4 py-3 text-sm font-semibold text-text-secondary transition;
+  }
+
+  .crm-nav-item:hover {
+    @apply bg-bg-hover text-text-primary;
+  }
+
+  .crm-nav-item-active {
+    @apply bg-bg-hover text-text-primary;
+  }
+
+  .crm-nav-indicator {
+    @apply absolute left-1 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-accent-primary opacity-0 transition-opacity;
+  }
+
+  .crm-user-badge {
+    @apply rounded-2xl border border-border/60 bg-white/5 p-4 text-sm text-text-secondary backdrop-blur;
+  }
+
+  .crm-day-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-border bg-bg-hover px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary;
+  }
+
+  .crm-table-card {
+    @apply rounded-2xl border border-border bg-bg-card;
+  }
+
+  .crm-icon-btn {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-bg-hover text-text-secondary transition hover:text-text-primary;
+  }
+
+  .crm-surface {
+    @apply rounded-2xl border border-border bg-bg-card;
+  }
+}
+
+@layer utilities {
+  .crm-no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .crm-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .crm-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #4f8ef7 #0a0c10;
+  }
+
+  .crm-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .crm-scrollbar::-webkit-scrollbar-track {
+    background: #0a0c10;
+  }
+
+  .crm-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #4f8ef7;
+    border-radius: 999px;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}

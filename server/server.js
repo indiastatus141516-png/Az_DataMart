@@ -1,6 +1,5 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const cors = require("cors");
 const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
 
@@ -16,30 +15,23 @@ const app = express();
 // Middleware
 // ---------------------
 app.use(cookieParser());
-// Configure CORS to accept multiple known origins (supports comma-separated CLIENT_URL)
-const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000" ||"https://leadsdogwoods.online")
-  .split(",")
-  .map((o) => o.trim());
-const corsOptions = {
-  origin: function (origin, callback) {
-    // allow non-browser requests (curl, server-to-server) where origin is undefined
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
-    return callback(new Error("CORS policy: origin not allowed"));
-  },
-  credentials: true,
-  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "X-Requested-With",
-    "X-Client-Id",
-  ],
-  optionsSuccessStatus: 200,
-};
-app.use(cors(corsOptions));
-// allow preflight for all routes
-app.options("/", cors(corsOptions));
+// Fully open CORS (no restrictions)
+app.use((req, res, next) => {
+  const origin = req.headers.origin || "*";
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Vary", "Origin");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, X-Client-Id"
+  );
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 
 // Increase payload size limit to handle large JSON requests
 app.use(express.json({ limit: "30mb" })); // Accept JSON up to 10MB

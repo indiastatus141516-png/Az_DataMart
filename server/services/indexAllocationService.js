@@ -1,5 +1,34 @@
 const mongoose = require('mongoose');
 const DataItem = require('../models/DataItem');
+const Category = require('../models/Category');
+
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+async function resolveCategoryCandidates(category, session = null) {
+  const raw = (category || "").toString().trim();
+  if (!raw) return [];
+
+  const candidates = [raw];
+  try {
+    if (mongoose.Types.ObjectId.isValid(raw)) {
+      const byId = await Category.findById(raw).session(session);
+      if (byId?.name) candidates.push(byId.name);
+    }
+
+    const byCode = await Category.findOne({ id: raw }).session(session);
+    if (byCode?.name) candidates.push(byCode.name);
+
+    const byName = await Category.findOne({
+      name: { $regex: `^${escapeRegex(raw)}$`, $options: "i" },
+    }).session(session);
+    if (byName?.name) candidates.push(byName.name);
+  } catch (err) {
+    // Best-effort resolution; allocation should still proceed with raw category.
+  }
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
 
 /**
  * Allocate lowest-index available DataItems for a category to a user.
@@ -29,8 +58,15 @@ async function allocateDataItems(category, quantity, userId, session = null, opt
     }
 
     try {
+      const categoryCandidates = await resolveCategoryCandidates(category, session);
       // Build query to select lowest-index available items for the category
-      const query = { category, status: 'available' };
+      const query = {
+        category:
+          categoryCandidates.length > 1
+            ? { $in: categoryCandidates }
+            : categoryCandidates[0] || category,
+        status: 'available',
+      };
       if (options.deliveryDate) query['metadata.deliveryDate'] = options.deliveryDate;
       if (options.dayOfWeek) query['metadata.dayOfWeek'] = options.dayOfWeek;
 
