@@ -156,6 +156,22 @@
     @apply flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-bg-card p-4;
   }
 
+  .crm-list-grid-header {
+    @apply bg-[#f3f4f8];
+  }
+
+  .crm-list-grid-head-cell {
+    @apply px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#65749c];
+  }
+
+  .crm-list-grid-row {
+    @apply border-t border-[#e6e8f4] transition-colors hover:bg-[#f8f9ff];
+  }
+
+  .crm-list-grid-cell {
+    @apply px-4 py-4;
+  }
+
   .crm-field {
     @apply w-full rounded-lg border border-border bg-bg-card px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/50;
   }

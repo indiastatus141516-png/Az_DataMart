@@ -1328,88 +1328,96 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                 </div>
-                <Button variant="contained" onClick={() => setAddFixedCategoryDialog({ open: true, name: '' })}>
+                <Button
+                  variant="contained"
+                  className="crm-btn crm-btn-primary crm-btn-sharp"
+                  onClick={() => setAddFixedCategoryDialog({ open: true, name: '' })}
+                >
                   Add New Category
                 </Button>
               </div>
-                <TableContainer component={Paper} sx={{ mt: 3 }}>
-                <Table className="table-fixed">
-                  <colgroup>
-                    <col className="w-[10%]" />
-                    <col className="w-[40%]" />
-                    <col className="w-[25%]" />
-                    <col className="w-[25%]" />
-                  </colgroup>
-                  <TableHead className='crm-thead'>
-                    <TableRow>
-                      <TableCell className="crm-cell-head">S.No</TableCell>
-                      <TableCell className="crm-cell-head">Category Name</TableCell>
-                      <TableCell className="crm-cell-head">Upload Data</TableCell>
-                      <TableCell className="crm-cell-head">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {fixedCategories.map((cat, index) => (
-                      <TableRow key={cat.id} hover>
-                        <TableCell>{index + 1}</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {editingCategory === cat.id ? (
-                              <TextField
-                                size="small"
-                                value={editCategoryName}
-                                onChange={(e) => setEditCategoryName(e.target.value)}
-                                onBlur={() => handleSaveCategoryName(cat.id)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSaveCategoryName(cat.id)}
-                                autoFocus
-                              />
-                            ) : (
-                              <Typography sx={{ cursor: 'default' }}>{cat.name}</Typography>
-                            )}
-                            {!editingCategory && (
-                              <IconButton size="small" onClick={() => startEditingCategory(cat.id)} aria-label={`edit-${cat.id}`}>
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            )}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <input
-                            type="file"
-                            accept=".xlsx,.xls"
-                            onChange={(e) => handleFileSelect(cat.id, e.target.files[0])}
-                            style={{ display: 'none' }}
-                            id={`upload-${cat.id}`}
+              <div className="mt-3 overflow-hidden rounded-2xl border border-[#d9dcef] bg-white shadow-sm">
+                <div className="grid grid-cols-[80px_1.6fr_1.4fr_0.9fr] bg-[#f3f4f8]">
+                  {["S.No", "Category Name", "Upload Data", "Actions"].map((h) => (
+                    <div
+                      key={h}
+                      className={`px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#65749c] ${
+                        h === "Category Name" ? "text-left" : "text-center"
+                      }`}
+                    >
+                      {h}
+                    </div>
+                  ))}
+                </div>
+
+                {fixedCategories.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-[#6f7b9f]">
+                    No categories found. Add a new category to get started.
+                  </div>
+                ) : (
+                  fixedCategories.map((cat, index) => (
+                    <div key={cat.id} className="grid grid-cols-[80px_1.6fr_1.4fr_0.9fr] border-t border-[#e6e8f4] transition-colors hover:bg-[#f8f9ff]">
+                      <div className="flex items-center justify-center px-3 py-3 text-sm font-semibold text-[#1a1a2e]">
+                        {index + 1}
+                      </div>
+
+                      <div className="flex items-center gap-2 px-3 py-3">
+                        {editingCategory === cat.id ? (
+                          <TextField
+                            size="small"
+                            value={editCategoryName}
+                            onChange={(e) => setEditCategoryName(e.target.value)}
+                            onBlur={() => handleSaveCategoryName(cat.id)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSaveCategoryName(cat.id)}
+                            autoFocus
                           />
-                          <label htmlFor={`upload-${cat.id}`}>
-                            <Button variant="outlined" component="span" size="small">
-                              Choose File
-                            </Button>
-                          </label>
-                          {uploadCategoryDialog.categoryId === cat.id && uploadCategoryDialog.file && (
-                            <Typography variant="body2">{uploadCategoryDialog.file.name}</Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleUploadCategory(cat.id)}
-                              disabled={!(uploadCategoryDialog.categoryId === cat.id && uploadCategoryDialog.file)}
-                            >
-                              <UploadIcon />
+                        ) : (
+                          <>
+                            <span className="inline-flex min-w-[84px] justify-center rounded-full bg-[#f1ecff] px-3 py-1 text-xs font-semibold text-[#6c47d9]">
+                              {cat.name}
+                            </span>
+                            <IconButton size="small" onClick={() => startEditingCategory(cat.id)} aria-label={`edit-${cat.id}`}>
+                              <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" color="error" onClick={() => setDeleteFixedCategoryDialog({ open: true, category: cat })}>
-                              <DeleteIcon />
-                            </IconButton>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 px-3 py-3">
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={(e) => handleFileSelect(cat.id, e.target.files[0])}
+                          style={{ display: 'none' }}
+                          id={`upload-${cat.id}`}
+                        />
+                        <label htmlFor={`upload-${cat.id}`}>
+                          <Button variant="outlined" component="span" size="small" className="crm-btn crm-btn-outline crm-btn-sharp">
+                            Choose File
+                          </Button>
+                        </label>
+                        {uploadCategoryDialog.categoryId === cat.id && uploadCategoryDialog.file && (
+                          <span className="text-xs text-[#5f6c93]">{uploadCategoryDialog.file.name}</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-center gap-2 px-3 py-3">
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleUploadCategory(cat.id)}
+                          disabled={!(uploadCategoryDialog.categoryId === cat.id && uploadCategoryDialog.file)}
+                        >
+                          <UploadIcon />
+                        </IconButton>
+                        <IconButton size="small" color="error" onClick={() => setDeleteFixedCategoryDialog({ open: true, category: cat })}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </CardContent>
           </Card>
         );

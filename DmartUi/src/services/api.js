@@ -8,6 +8,8 @@ const api = axios.create({
   withCredentials: true, // allow sending/receiving httpOnly cookies
 });
 
+let refreshPromise = null;
+
 // Add token and clientId to requests
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem("token");
@@ -28,6 +30,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    if (!originalRequest) return Promise.reject(error);
     if (
       error.response &&
       error.response.status === 401 &&
@@ -36,10 +39,18 @@ api.interceptors.response.use(
     ) {
       originalRequest._retry = true;
       try {
-        const resp = await api.post("/auth/refresh");
-        const newToken = resp.data.token;
+        if (!refreshPromise) {
+          refreshPromise = api
+            .post("/auth/refresh")
+            .finally(() => {
+              refreshPromise = null;
+            });
+        }
+        const resp = await refreshPromise;
+        const newToken = resp?.data?.token;
         if (newToken) {
           sessionStorage.setItem("token", newToken);
+          originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
         }

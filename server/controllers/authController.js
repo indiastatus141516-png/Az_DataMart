@@ -6,6 +6,8 @@ const User = require("../models/User");
 const RevokedToken = require("../models/RevokedToken");
 const Counter = require("../models/Counter");
 
+const ACCESS_TOKEN_TTL = process.env.JWT_ACCESS_EXPIRES_IN || "60m";
+
 exports.register = async (req, res) => {
   try {
     const { email, password, profile } = req.body;
@@ -92,7 +94,7 @@ exports.login = async (req, res) => {
     const token = jwt.sign(
       { userId: user.userId, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: ACCESS_TOKEN_TTL }
     );
 
     // Create refresh token (rotate on login). Embed clientId when provided so refresh tokens are scoped to a tab/session.
@@ -184,7 +186,7 @@ exports.refreshToken = async (req, res) => {
     const newAccessToken = jwt.sign(
       { userId: user.userId, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: ACCESS_TOKEN_TTL }
     );
     const newRefreshPayload = { userId: user.userId };
     if (decoded.clientId) newRefreshPayload.clientId = decoded.clientId;

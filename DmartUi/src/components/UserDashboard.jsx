@@ -1323,7 +1323,7 @@ const UserDashboard = () => {
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                   <div>
                                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                      Purchase #{purchase._id.slice(-6)}
+                                      Order Ref: {purchase._id.slice(-6)}
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary">
                                       Purchased on {new Date(purchase.purchasedAt).toLocaleDateString()}
@@ -1358,60 +1358,64 @@ const UserDashboard = () => {
                                 </div>
 
                                 <Divider sx={{ my: 2 }} />
-                                <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e2e6f6' }}>
-                                  <Table size="small" sx={{ tableLayout: 'fixed' }}>
-                                    <TableHead className="crm-thead">
-                                      <TableRow>
-                                        <TableCell className="crm-cell-head text-center" sx={{ width: 90, textAlign: 'center' }}>Item #</TableCell>
-                                        <TableCell className="crm-cell-head text-center" sx={{ width: 160, textAlign: 'center' }}>Category</TableCell>
-                                        <TableCell className="crm-cell-head text-center" sx={{ width: 110, textAlign: 'center' }}>Unit Price</TableCell>
-                                        <TableCell className="crm-cell-head text-left" sx={{ textAlign: 'left' }}>Details</TableCell>
-                                      </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                      {items.length === 0 ? (
-                                        <TableRow>
-                                          <TableCell colSpan={4} sx={{ textAlign: 'center', py: 3, color: '#7381aa' }}>
-                                            No items available in this purchase.
-                                          </TableCell>
-                                        </TableRow>
-                                      ) : (
-                                        items.map((item, idx) => {
-                                          const details = [];
-                                          if (item?.metadata?.deliveryDate) details.push(`Date: ${item.metadata.deliveryDate}`);
-                                          if (item?.metadata?.dayOfWeek) details.push(`Day: ${item.metadata.dayOfWeek}`);
-                                          return (
-                                            <TableRow key={`${purchase._id}-${item.index || idx}`} hover>
-                                              <TableCell sx={{ textAlign: 'center' }}>
-                                                <Chip
-                                                  label={item.index ?? idx + 1}
-                                                  size="small"
-                                                  color="primary"
-                                                  variant="outlined"
-                                                />
-                                              </TableCell>
-                                              <TableCell sx={{ textAlign: 'center' }}>
-                                                <Typography variant="body2" sx={{ fontWeight: 600, textAlign: 'center' }}>
-                                                  {item.category || '-'}
-                                                </Typography>
-                                              </TableCell>
-                                              <TableCell sx={{ textAlign: 'center' }}>
-                                                <Typography variant="body2" color="primary" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
-                                                  ${(Number(item.price) || 0).toFixed(2)}
-                                                </Typography>
-                                              </TableCell>
-                                              <TableCell sx={{ textAlign: 'left' }}>
-                                                <Typography variant="body2" color="text.secondary">
-                                                  {details.length ? details.join(' | ') : 'Standard purchased item'}
-                                                </Typography>
-                                              </TableCell>
-                                            </TableRow>
-                                          );
-                                        })
-                                      )}
-                                    </TableBody>
-                                  </Table>
-                                </TableContainer>
+                                <div className="overflow-hidden rounded-2xl border border-[#d9dcef] bg-white">
+                                  <div className="crm-list-grid-header grid grid-cols-[0.8fr_1.05fr_0.95fr_2fr]">
+                                    {["Item #", "Category", "Unit Price", "Delivery Info"].map((head) => (
+                                      <div
+                                        key={head}
+                                        className={`crm-list-grid-head-cell ${
+                                          head === "Delivery Info" ? "text-left" : "text-center"
+                                        }`}
+                                      >
+                                        {head}
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {items.length === 0 ? (
+                                    <div className="px-4 py-8 text-center text-sm text-[#7381aa]">
+                                      No items available in this purchase.
+                                    </div>
+                                  ) : (
+                                    items.map((item, idx) => {
+                                      const detailDate = item?.metadata?.deliveryDate || "-";
+                                      const detailDay = item?.metadata?.dayOfWeek || "-";
+                                      return (
+                                        <div
+                                          key={`${purchase._id}-${item.index || idx}`}
+                                          className="crm-list-grid-row grid grid-cols-[0.8fr_1.05fr_0.95fr_2fr]"
+                                        >
+                                          <div className="crm-list-grid-cell flex items-center justify-center">
+                                            <Chip
+                                              label={item.index ?? idx + 1}
+                                              size="small"
+                                              color="primary"
+                                              variant="outlined"
+                                            />
+                                          </div>
+                                          <div className="crm-list-grid-cell flex items-center justify-center">
+                                            <span className="inline-flex min-w-[84px] justify-center rounded-full bg-[#f1ecff] px-3 py-1 text-xs font-semibold text-[#6c47d9]">
+                                              {item.category || "-"}
+                                            </span>
+                                          </div>
+                                          <div className="crm-list-grid-cell flex items-center justify-center">
+                                            <span className="inline-flex min-w-[74px] justify-center rounded-full bg-[#e8f0ff] px-3 py-1 text-xs font-semibold text-[#2f4ea0]">
+                                              ${(Number(item.price) || 0).toFixed(2)}
+                                            </span>
+                                          </div>
+                                          <div className="crm-list-grid-cell flex items-center gap-2">
+                                            <span className="inline-flex rounded border border-[#d9dcef] bg-[#f7f8ff] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5f6c93]">
+                                              Date {detailDate}
+                                            </span>
+                                            <span className="inline-flex rounded border border-[#d9dcef] bg-[#f7f8ff] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5f6c93]">
+                                              Day {detailDay}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
                               </>
                             );
                           })()}
