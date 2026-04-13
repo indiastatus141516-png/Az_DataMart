@@ -46,6 +46,13 @@ app.get("/", (req, res) => {
   res.send("Backend API is running 🚀");
 });
 
+const auth = require("./middleware/auth");
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/admin", auth, require("./routes/admin"));
+app.use("/api/data", auth, require("./routes/data"));
+app.use("/api/purchase", auth, require("./routes/purchase"));
+app.use("/api/profile", require("./routes/profile"));
+
 // ---------------------
 // MongoDB connection
 // ---------------------
@@ -63,7 +70,6 @@ const dbInitPromise = connectDatabase()
 
     const User = require("./models/User");
     const bcrypt = require("bcryptjs");
-    const auth = require("./middleware/auth");
 
     const adminExists = await User.findOne({ role: "admin" });
     if (!adminExists) {
@@ -81,19 +87,19 @@ const dbInitPromise = connectDatabase()
         "Default admin user created: email: admin@datamartx.com, password: admin123",
       );
     }
-
-    app.use("/api/auth", require("./routes/auth"));
-    app.use("/api/admin", auth, require("./routes/admin"));
-    app.use("/api/data", auth, require("./routes/data"));
-    app.use("/api/purchase", auth, require("./routes/purchase"));
-    app.use("/api/profile", require("./routes/profile"));
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err);
   });
 
 app.use(async (req, res, next) => {
-  if (req.path === "/" || req.path === "/favicon.ico") return next();
+  if (
+    req.method === "OPTIONS" ||
+    req.path === "/" ||
+    req.path === "/favicon.ico"
+  ) {
+    return next();
+  }
   try {
     await dbInitPromise;
     if (mongoose.connection.readyState !== 1) {
