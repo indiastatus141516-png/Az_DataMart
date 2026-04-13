@@ -15,14 +15,10 @@ const app = express();
 // Middleware
 // ---------------------
 app.use(cookieParser());
-app.set("trust proxy", true);
-
 // Fully open CORS (no restrictions)
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
+  const origin = req.headers.origin || "*";
+  res.header("Access-Control-Allow-Origin", origin);
   res.header("Vary", "Origin");
   res.header("Access-Control-Allow-Credentials", "true");
   res.header(
@@ -33,11 +29,8 @@ app.use((req, res, next) => {
     "Access-Control-Allow-Headers",
     "Content-Type, Authorization, X-Requested-With, X-Client-Id",
   );
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
-});
-
-app.options("*", (req, res) => {
-  res.sendStatus(204);
 });
 
 // Increase payload size limit to handle large JSON requests
