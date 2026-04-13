@@ -1203,6 +1203,16 @@ const AdminDashboard = () => {
                     <div className="flex items-center justify-center px-3 py-3 text-sm capitalize">{user.role}</div>
                     <div className="flex items-center justify-center px-3 py-3 text-sm whitespace-nowrap">{new Date(user.requestedAt).toLocaleDateString()}</div>
                     <div className="flex items-center justify-center gap-1 px-3 py-3">
+                      {user.role !== 'admin' && (
+                        <>
+                          <IconButton size="small" color="primary" onClick={() => handleViewProfile(user.userId)} title="View user profile">
+                            <VisibilityIcon />
+                          </IconButton>
+                          <IconButton size="small" color="primary" onClick={() => handleEditProfile(user)} title="Edit user profile">
+                            <EditIcon />
+                          </IconButton>
+                        </>
+                      )}
                       {user.role !== 'admin' && user.status === 'pending' && (
                         <>
                           <IconButton size="small" color="success" onClick={() => handleUserStatusUpdate(user.userId, 'approved')}><CheckCircleIcon /></IconButton>
@@ -1782,6 +1792,18 @@ const AdminDashboard = () => {
             )}
           </DialogContent>
           <DialogActions>
+            {viewProfileDialog.user && viewProfileDialog.user.role !== 'admin' && (
+              <Button
+                variant="contained"
+                onClick={() => {
+                  const userToEdit = viewProfileDialog.user;
+                  setViewProfileDialog({ open: false, user: null });
+                  handleEditProfile(userToEdit);
+                }}
+              >
+                Edit Info
+              </Button>
+            )}
             <Button onClick={() => setViewProfileDialog({ open: false, user: null })}>Close</Button>
           </DialogActions>
         </Dialog>
@@ -1794,7 +1816,6 @@ const AdminDashboard = () => {
           </DialogTitle>
           <DialogContent>
             <TextField
-              autoFocus
               margin="dense"
               label="Email"
               type="email"
@@ -1804,6 +1825,7 @@ const AdminDashboard = () => {
               onChange={(e) => setEditProfileDialog({ ...editProfileDialog, email: e.target.value })}
             />
             <TextField
+              autoFocus
               margin="dense"
               label="First Name"
               type="text"

@@ -389,7 +389,7 @@ const UserDashboard = () => {
         profileData.address = address;
       }
 
-      await userAPI.updateProfile({ profile: profileData, email: profile.email });
+      await userAPI.updateProfile({ profile: profileData });
       setSuccess('Profile updated successfully');
       setIsEditing(false);
       loadProfile(); // Reload profile to reflect changes
@@ -580,6 +580,29 @@ const UserDashboard = () => {
     return list.findIndex((item) => (item?.name || "").trim().toLowerCase() === currentName) === index;
   });
 
+  const userDisplayName = [
+    profile?.firstName?.trim(),
+    profile?.lastName?.trim(),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    || user?.email?.split("@")[0]
+    || "User";
+
+  const isProfileViewCardMode = !isEditing && Boolean(profile?.firstName);
+  const profileAddressLine = [
+    profile.address?.street,
+    [profile.address?.city, profile.address?.state, profile.address?.zipCode].filter(Boolean).join(", "),
+    profile.address?.country,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+  const profileAddressLines = [
+    profile.address?.street,
+    [profile.address?.city, profile.address?.state, profile.address?.zipCode].filter(Boolean).join(", "),
+    profile.address?.country,
+  ].filter(Boolean);
+
   const getCategoryEmoji = (categoryName) => {
     const key = (categoryName || "").toLowerCase();
     if (key.includes("vehicle") || key.includes("car")) return "🚚";
@@ -606,7 +629,7 @@ const UserDashboard = () => {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="crm-eyebrow">User Workspace</p>
-            <h1 className="crm-title">Welcome back, User</h1>
+            <h1 className="crm-title">Welcome back, {userDisplayName}</h1>
             <p className="crm-subtitle">
               Track your purchases, manage data requests, and keep weekly demand aligned.
             </p>
@@ -1290,63 +1313,108 @@ const UserDashboard = () => {
                     filteredPurchased.map((purchase) => (
                       <Card key={purchase._id} className="crm-card" sx={{ mb: 3 }}>
                         <CardContent sx={{ p: 3 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Box>
-                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                Purchase #{purchase._id.slice(-6)}
-                              </Typography>
-                              <Typography variant="body2" color="text.secondary">
-                                {new Date(purchase.purchasedAt).toLocaleDateString()} | {Array.isArray(purchase.dataItems) ? purchase.dataItems.length : 0} items
-                              </Typography>
-                            </Box>
-                            <Box sx={{ textAlign: 'right' }}>
-                              <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={() => handleDownloadData(purchase)}
-                                className="crm-btn crm-btn-success crm-btn-sharp"
-                                startIcon={<DownloadIcon />}
-                              >
-                                Download Excel
-                              </Button>
-                            </Box>
-                          </Box>
-                          <Divider sx={{ my: 2 }} />
-                          <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-                            <Table size="small">
-                              <TableHead className="crm-thead">
-                                <TableRow>
-                                  <TableCell className="crm-cell-head">Index</TableCell>
-                                  <TableCell className="crm-cell-head">Category</TableCell>
-                                  <TableCell className="crm-cell-head">Price</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {(Array.isArray(purchase.dataItems) ? purchase.dataItems : []).map((item) => (
-                                  <TableRow key={item.index} hover>
-                                    <TableCell>
-                                      <Chip
-                                        label={item.index}
-                                        size="small"
-                                        color="primary"
-                                        variant="outlined"
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                                        {item.category}
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Typography variant="body2" color="primary" sx={{ fontWeight: 'bold' }}>
-                                        ${item.price}
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
+                          {(() => {
+                            const items = Array.isArray(purchase.dataItems) ? purchase.dataItems : [];
+                            const uniqueCategories = Array.from(
+                              new Set(items.map((it) => it?.category).filter(Boolean))
+                            );
+                            return (
+                              <>
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div>
+                                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                      Purchase #{purchase._id.slice(-6)}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Purchased on {new Date(purchase.purchasedAt).toLocaleDateString()}
+                                    </Typography>
+                                  </div>
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={() => handleDownloadData(purchase)}
+                                    className="crm-btn crm-btn-success crm-btn-sharp"
+                                    startIcon={<DownloadIcon />}
+                                  >
+                                    Download Excel
+                                  </Button>
+                                </div>
+
+                                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                  <div className="rounded-xl border border-[#dbe2f6] bg-[#f7f9ff] px-3 py-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#7381aa]">Total Items</p>
+                                    <p className="mt-1 text-base font-semibold text-[#1a2a47]">{items.length}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-[#dbe2f6] bg-[#f7f9ff] px-3 py-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#7381aa]">Categories</p>
+                                    <p className="mt-1 text-base font-semibold text-[#1a2a47]">{uniqueCategories.length}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-[#dbe2f6] bg-[#f7f9ff] px-3 py-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#7381aa]">Total Amount</p>
+                                    <p className="mt-1 text-base font-semibold text-[#1a2a47]">
+                                      ${items.reduce((sum, it) => sum + (Number(it?.price) || 0), 0).toFixed(2)}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <Divider sx={{ my: 2 }} />
+                                <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e2e6f6' }}>
+                                  <Table size="small" sx={{ tableLayout: 'fixed' }}>
+                                    <TableHead className="crm-thead">
+                                      <TableRow>
+                                        <TableCell className="crm-cell-head text-center" sx={{ width: 90, textAlign: 'center' }}>Item #</TableCell>
+                                        <TableCell className="crm-cell-head text-center" sx={{ width: 160, textAlign: 'center' }}>Category</TableCell>
+                                        <TableCell className="crm-cell-head text-center" sx={{ width: 110, textAlign: 'center' }}>Unit Price</TableCell>
+                                        <TableCell className="crm-cell-head text-left" sx={{ textAlign: 'left' }}>Details</TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {items.length === 0 ? (
+                                        <TableRow>
+                                          <TableCell colSpan={4} sx={{ textAlign: 'center', py: 3, color: '#7381aa' }}>
+                                            No items available in this purchase.
+                                          </TableCell>
+                                        </TableRow>
+                                      ) : (
+                                        items.map((item, idx) => {
+                                          const details = [];
+                                          if (item?.metadata?.deliveryDate) details.push(`Date: ${item.metadata.deliveryDate}`);
+                                          if (item?.metadata?.dayOfWeek) details.push(`Day: ${item.metadata.dayOfWeek}`);
+                                          return (
+                                            <TableRow key={`${purchase._id}-${item.index || idx}`} hover>
+                                              <TableCell sx={{ textAlign: 'center' }}>
+                                                <Chip
+                                                  label={item.index ?? idx + 1}
+                                                  size="small"
+                                                  color="primary"
+                                                  variant="outlined"
+                                                />
+                                              </TableCell>
+                                              <TableCell sx={{ textAlign: 'center' }}>
+                                                <Typography variant="body2" sx={{ fontWeight: 600, textAlign: 'center' }}>
+                                                  {item.category || '-'}
+                                                </Typography>
+                                              </TableCell>
+                                              <TableCell sx={{ textAlign: 'center' }}>
+                                                <Typography variant="body2" color="primary" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
+                                                  ${(Number(item.price) || 0).toFixed(2)}
+                                                </Typography>
+                                              </TableCell>
+                                              <TableCell sx={{ textAlign: 'left' }}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                  {details.length ? details.join(' | ') : 'Standard purchased item'}
+                                                </Typography>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })
+                                      )}
+                                    </TableBody>
+                                  </Table>
+                                </TableContainer>
+                              </>
+                            );
+                          })()}
                         </CardContent>
                       </Card>
                     ))
@@ -1385,7 +1453,9 @@ const UserDashboard = () => {
                                 label="Email"
                                 type="email"
                                 value={profile.email || user?.email || ''}
-                                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                                disabled
+                                InputProps={{ readOnly: true }}
+                                helperText="Email is managed by admin and cannot be changed here."
                                 sx={{ mb: 3, borderRadius: 2 }}
                               />
 
@@ -1501,77 +1571,122 @@ const UserDashboard = () => {
                             </>
                           ) : (
                             <>
-                              <Box sx={{ mb: 3 }}>
-                                <Typography variant="body1" sx={{ mb: 1 }}>
-                                  <strong>Email:</strong> {profile.email || user?.email}
-                                </Typography>
-                                <Typography variant="body1" sx={{ mb: 1 }}>
-                                  <strong>Name:</strong> {profile.firstName} {profile.lastName}
-                                </Typography>
-                                <Typography variant="body1" sx={{ mb: 1 }}>
-                                  <strong>Company:</strong> {profile.company}
-                                </Typography>
-                                <Typography variant="body1" sx={{ mb: 1 }}>
-                                  <strong>Phone:</strong> {profile.phone}
-                                </Typography>
-                                {(profile.address?.street || profile.address?.city || profile.address?.state || profile.address?.zipCode || profile.address?.country) && (
-                                  <>
-                                    <Typography variant="body1" sx={{ mb: 1 }}>
-                                      <strong>Address:</strong>
-                                    </Typography>
-                                    {profile.address?.street && (
-                                      <Typography variant="body2" sx={{ ml: 2, mb: 0.5 }}>
-                                        {profile.address.street}
-                                      </Typography>
-                                    )}
-                                    {(profile.address?.city || profile.address?.state || profile.address?.zipCode) && (
-                                      <Typography variant="body2" sx={{ ml: 2, mb: 0.5 }}>
-                                        {[profile.address?.city, profile.address?.state, profile.address?.zipCode].filter(Boolean).join(', ')}
-                                      </Typography>
-                                    )}
-                                    {profile.address?.country && (
-                                      <Typography variant="body2" sx={{ ml: 2, mb: 1 }}>
-                                        {profile.address.country}
-                                      </Typography>
-                                    )}
-                                  </>
-                                )}
-                              </Box>
+                              <div className="mx-auto w-full max-w-[350px]">
+                                <div className="relative min-h-[590px] overflow-hidden rounded-[28px] border border-[#d6e2f5] bg-gradient-to-b from-[#eaf3ff] via-[#f4f8ff] to-[#ffffff] p-5 shadow-[0_12px_28px_rgba(70,100,160,0.16)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(70,100,160,0.22)]">
+                                  <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-[#b7d6ff]/55 blur-2xl" />
+                                  <div className="absolute -left-8 bottom-28 h-20 w-20 rounded-full bg-[#d8e8ff]/60 blur-2xl" />
 
-                              <Button
-                                variant="outlined"
-                                size="large"
-                                onClick={() => setIsEditing(true)}
-                                className="crm-btn crm-btn-outline crm-btn-sharp"
-                                startIcon={<EditIcon />}
-                              >
-                                Edit Profile
-                              </Button>
+                                  <div className="relative z-10 flex justify-center">
+                                    <Avatar sx={{ width: 92, height: 92, bgcolor: '#5f7fc7', color: '#ffffff', border: '4px solid rgba(255,255,255,0.9)' }}>
+                                      <PersonIcon sx={{ fontSize: '2.5rem' }} />
+                                    </Avatar>
+                                  </div>
+
+                                  <div className="relative z-10 mt-4 text-center">
+                                    <p className="text-2xl font-bold text-[#1d2a45]">{userDisplayName}</p>
+                                    <p className="mt-1 text-sm italic text-[#5f739c]">{profile.company || "Independent Professional"}</p>
+                                  </div>
+
+                                  <div className="relative z-10 mt-6 space-y-2.5">
+                                    {[
+                                      {
+                                        label: "Email",
+                                        value: profile.email || user?.email || "Not set",
+                                        icon: (
+                                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                            <path d="M4 7h16v10H4z" />
+                                            <path d="M4 8l8 6 8-6" />
+                                          </svg>
+                                        ),
+                                      },
+                                      {
+                                        label: "Phone",
+                                        value: profile.phone || "Not set",
+                                        icon: (
+                                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                            <path d="M7 4h3l1 4-2 2c1 2 3 4 5 5l2-2 4 1v3c0 1-1 2-2 2C10 19 5 14 5 8c0-1 1-2 2-2z" />
+                                          </svg>
+                                        ),
+                                      },
+                                      {
+                                        label: "Location",
+                                        value: profileAddressLine || "Not set",
+                                        icon: (
+                                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                            <path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z" />
+                                            <circle cx="12" cy="10" r="2.5" />
+                                          </svg>
+                                        ),
+                                      },
+                                    ].map((item) => (
+                                      <div
+                                        key={item.label}
+                                        className="rounded-2xl border border-[#d7e3f8] bg-white/88 px-3 py-3 transition-colors hover:border-[#b9cdf1] hover:bg-white"
+                                      >
+                                        <div className="flex items-center gap-2 text-[#4f6fa8]">
+                                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#eef4ff]">
+                                            {item.icon}
+                                          </span>
+                                          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#7a8fb6]">{item.label}</p>
+                                        </div>
+                                        <p className="mt-1.5 break-words pl-9 text-sm font-medium text-[#1a2a47]">{item.value}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="relative z-10 mt-4 rounded-2xl border border-[#d7e3f8] bg-white/90 px-3 py-3">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#7a8fb6]">Address Details</p>
+                                    {profileAddressLines.length > 0 ? (
+                                      <div className="mt-1.5 space-y-1">
+                                        {profileAddressLines.map((line) => (
+                                          <p key={line} className="text-sm text-[#1a2a47]">{line}</p>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-1.5 text-sm text-[#1a2a47]">Not set</p>
+                                    )}
+                                  </div>
+
+                                  <div className="relative z-10 mt-5">
+                                    <Button
+                                      variant="outlined"
+                                      size="large"
+                                      onClick={() => setIsEditing(true)}
+                                      className="crm-btn crm-btn-outline crm-btn-sharp w-full"
+                                      startIcon={<EditIcon />}
+                                    >
+                                      Edit Profile
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
                             </>
                           )}
                         </CardContent>
                       </Card>
                     </Grid>
 
+                    {!isProfileViewCardMode && (
                     <Grid item xs={12} md={4}>
                       <Card sx={{
                         borderRadius: 3,
                         boxShadow: '0 4px 20px rgba(124,58,237,0.12)',
                         background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)'
-                      }}>
+                      }} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
                         <CardContent sx={{ p: 3, textAlign: 'center' }}>
                           <Avatar sx={{ width: 80, height: 80, mx: 'auto', mb: 2, bgcolor: '#7C3AED', color: '#ffffff' }}>
                             <PersonIcon sx={{ fontSize: '2rem' }} />
                           </Avatar>
                           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                            {user?.email}
+                            {userDisplayName}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            User Account
+                            {profile.email || user?.email}
                           </Typography>
                         </CardContent>
                       </Card>
                     </Grid>
+                    )}
                   </Grid>
                 </Box>}
 
