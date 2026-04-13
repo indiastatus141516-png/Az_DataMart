@@ -46,13 +46,6 @@ app.get("/", (req, res) => {
   res.send("Backend API is running 🚀");
 });
 
-const auth = require("./middleware/auth");
-app.use("/api/auth", require("./routes/auth"));
-app.use("/api/admin", auth, require("./routes/admin"));
-app.use("/api/data", auth, require("./routes/data"));
-app.use("/api/purchase", auth, require("./routes/purchase"));
-app.use("/api/profile", require("./routes/profile"));
-
 // ---------------------
 // MongoDB connection
 // ---------------------
@@ -61,55 +54,45 @@ const connectDatabase = async () => {
   if (!process.env.MONGODB_URI) {
     throw new Error("MONGODB_URI is not defined in environment variables");
   }
-  await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000,
+  });
 };
 
 const dbInitPromise = connectDatabase()
-  .then(async () => {
+  .then(() => {
     console.log("MongoDB connected");
-
-    const User = require("./models/User");
-    const bcrypt = require("bcryptjs");
-
-    const adminExists = await User.findOne({ role: "admin" });
-    if (!adminExists) {
-      const hashedPassword = await bcrypt.hash("admin123", 10);
-      const adminUser = new User({
-        userId: "admin001",
-        email: "admin@datamartx.com",
-        password: hashedPassword,
-        status: "approved",
-        role: "admin",
-        requestedAt: new Date(),
-      });
-      await adminUser.save();
-      console.log(
-        "Default admin user created: email: admin@datamartx.com, password: admin123",
-      );
-    }
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err);
   });
 
-app.use(async (req, res, next) => {
-  if (
-    req.method === "OPTIONS" ||
-    req.path === "/" ||
-    req.path === "/favicon.ico"
-  ) {
+const ensureDatabaseConnected = async (req, res, next) => {
+  if (mongoose.connection.readyState === 1) {
     return next();
   }
   try {
-    await dbInitPromise;
-    if (mongoose.connection.readyState !== 1) {
-      throw new Error("Database is not connected");
-    }
+    await connectDatabase();
     next();
   } catch (err) {
-    console.error("DB unavailable", err);
+    console.error("Database connection failed:", err);
     res.status(500).json({ message: "Database unavailable" });
   }
+};
+
+app.use("/api", ensureDatabaseConnected);
+
+const auth = require("./middleware/auth");
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/admin", auth, require("./routes/admin"));
+app.use("/api/data", auth, require("./routes/data"));
+app.use("/api/purchase", auth, require("./routes/purchase"));
+app.use("/api/profile", require("./routes/profile"));
+
+// global error handler
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ message: "Server error" });
 });
 
 module.exports = app;
