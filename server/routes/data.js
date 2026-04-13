@@ -316,16 +316,31 @@ module.exports = router;
 // User-facing endpoint: get daily requirements for current week (includes uploaded counts)
 router.get("/daily-requirements", auth, async (req, res) => {
   try {
-    const today = new Date();
-    // Compute current week's Monday (treat Sunday as previous week's Monday)
-    const day = today.getDay(); // 0 (Sun) - 6 (Sat)
-    const diffToMonday = day === 0 ? -6 : 1 - day;
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + diffToMonday);
-    monday.setHours(0, 0, 0, 0);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    friday.setHours(23, 59, 59, 999);
+    let { startDate, endDate } = req.query;
+    const toMidnight = (input) => {
+      const d = new Date(input);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    };
+
+    let monday;
+    let friday;
+    if (startDate && endDate) {
+      monday = toMidnight(startDate);
+      friday = toMidnight(endDate);
+      friday.setHours(23, 59, 59, 999);
+    } else {
+      const today = new Date();
+      // Compute current week's Monday (treat Sunday as previous week's Monday)
+      const day = today.getDay(); // 0 (Sun) - 6 (Sat)
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      monday = new Date(today);
+      monday.setDate(today.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+      friday = new Date(monday);
+      friday.setDate(monday.getDate() + 4);
+      friday.setHours(23, 59, 59, 999);
+    }
 
     const requirementsData = await require("../models/DailyRequirement")
       .find({
@@ -367,7 +382,7 @@ router.get("/daily-requirements", auth, async (req, res) => {
       const qty = Math.max(Number(r.quantity) || 0, contributionTotal);
       // Count uploaded DataItems for this requirement date/category
       const DataItem = require("../models/DataItem");
-      const isoDate = new Date(r.date).toISOString().split("T")[0];
+      const isoDate = toLocalISODate(r.date);
       const uploaded = DataItem.countDocuments({
         category: r.category,
         status: "available",

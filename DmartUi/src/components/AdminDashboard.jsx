@@ -1014,6 +1014,13 @@ const AdminDashboard = () => {
     const getRequirementDayValue = (source, day) => {
       const dayValue = getDayValue(source, day);
       if (Number.isFinite(dayValue) && dayValue > 0) return dayValue;
+      const hasAnyExplicitDayValue = ["monday", "tuesday", "wednesday", "thursday", "friday"].some(
+        (d) => {
+          const value = getDayValue(source, d);
+          return Number.isFinite(value) && value > 0;
+        },
+      );
+      if (hasAnyExplicitDayValue) return Number.isFinite(dayValue) ? dayValue : 0;
       return getPerDayFallbackFromTotal(source);
     };
 

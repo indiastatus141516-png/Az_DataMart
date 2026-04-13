@@ -988,15 +988,41 @@ router.post("/daily-requirements", requireAdmin, async (req, res) => {
       return res.status(400).json({ message: "Invalid day of week" });
     }
 
-    // Upsert daily requirement
-    const requirement = await DailyRequirement.findOneAndUpdate(
-      { category, dayOfWeek: dayOfWeek.toLowerCase(), date: new Date(date) },
-      {
+    const normalizedDay = dayOfWeek.toLowerCase();
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(normalizedDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    // Match requirement by category/day within the same local calendar day.
+    let requirement = await DailyRequirement.findOne({
+      category,
+      dayOfWeek: normalizedDay,
+      date: { $gte: normalizedDate, $lte: dayEnd },
+    }).sort({ date: -1, createdAt: -1 });
+
+    if (requirement) {
+      requirement.quantity = quantity;
+      requirement.date = normalizedDate;
+      requirement.createdBy = req.user.userId;
+      await requirement.save();
+    } else {
+      requirement = await DailyRequirement.create({
+        category,
+        dayOfWeek: normalizedDay,
+        date: normalizedDate,
         quantity,
         createdBy: req.user.userId,
-      },
-      { upsert: true, new: true }
-    );
+      });
+    }
+
+    // Remove duplicates for same category/day/date to avoid overwrite-to-zero issues.
+    await DailyRequirement.deleteMany({
+      _id: { $ne: requirement._id },
+      category,
+      dayOfWeek: normalizedDay,
+      date: { $gte: normalizedDate, $lte: dayEnd },
+    });
 
     res.json({
       message: `Daily requirement set for ${category} on ${dayOfWeek}: ${quantity} items`,
@@ -1028,6 +1054,9 @@ router.post("/daily-data/upload", requireAdmin, async (req, res) => {
 
     const normalizedDate = new Date(date);
     normalizedDate.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(normalizedDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    const normalizedDay = dayOfWeek.toLowerCase();
 
     // Determine next index for sequential indexing
     const lastItem = await DataItem.findOne().sort({ index: -1 });
@@ -1040,18 +1069,39 @@ router.post("/daily-data/upload", requireAdmin, async (req, res) => {
       metadata: {
         ...row,
         deliveryDate: toLocalISODate(normalizedDate),
-        dayOfWeek: dayOfWeek.toLowerCase(),
+        dayOfWeek: normalizedDay,
       },
     }));
 
     await DataItem.insertMany(dataItems);
 
-    // Ensure a DailyRequirement exists for reporting (without storing uploaded rows)
-    const requirement = await DailyRequirement.findOneAndUpdate(
-      { category, dayOfWeek: dayOfWeek.toLowerCase(), date: normalizedDate },
-      { $setOnInsert: { createdBy: req.user.userId } },
-      { upsert: true, new: true }
-    );
+    // Ensure a DailyRequirement exists for reporting without resetting existing quantity.
+    let requirement = await DailyRequirement.findOne({
+      category,
+      dayOfWeek: normalizedDay,
+      date: { $gte: normalizedDate, $lte: dayEnd },
+    }).sort({ date: -1, createdAt: -1 });
+
+    if (requirement) {
+      requirement.date = normalizedDate;
+      await requirement.save();
+    } else {
+      requirement = await DailyRequirement.create({
+        category,
+        dayOfWeek: normalizedDay,
+        date: normalizedDate,
+        quantity: 0,
+        createdBy: req.user.userId,
+      });
+    }
+
+    // Keep only one requirement document for same category/day/date.
+    await DailyRequirement.deleteMany({
+      _id: { $ne: requirement._id },
+      category,
+      dayOfWeek: normalizedDay,
+      date: { $gte: normalizedDate, $lte: dayEnd },
+    });
 
     res.json({
       message: `Daily data uploaded for ${category} on ${dayOfWeek}: ${data.length} items`,
@@ -1128,12 +1178,20 @@ router.get("/daily-requirements", requireAdmin, async (req, res) => {
         };
       }
 
-      requirements[category][dayOfWeek] = quantity;
-      requirements[category].total += quantity;
+      requirements[category][dayOfWeek] = Math.max(
+        requirements[category][dayOfWeek] || 0,
+        quantity
+      );
     });
 
-    // Calculate grand total
+    // Calculate totals from normalized day values
     Object.values(requirements).forEach((cat) => {
+      cat.total =
+        (cat.monday || 0) +
+        (cat.tuesday || 0) +
+        (cat.wednesday || 0) +
+        (cat.thursday || 0) +
+        (cat.friday || 0);
       grandTotal.monday += cat.monday;
       grandTotal.tuesday += cat.tuesday;
       grandTotal.wednesday += cat.wednesday;
@@ -1337,7 +1395,7 @@ async function rebuildDailyRequirements(startDate, endDate) {
         const qty = getDayQuantity(req.dailyQuantities, dayOfWeek);
         if (qty <= 0) continue;
 
-        const key = dateOnly.toISOString().split("T")[0];
+        const key = toLocalISODate(dateOnly);
         contributionsMap[key] = contributionsMap[key] || {};
         contributionsMap[key][req.category] =
           contributionsMap[key][req.category] || [];
@@ -1399,7 +1457,7 @@ async function rebuildDailyRequirements(startDate, endDate) {
       quantity: 0,
     });
     for (const dr of candidates) {
-      const iso = new Date(dr.date).toISOString().split("T")[0];
+      const iso = toLocalISODate(dr.date);
       const count = await DataItem.countDocuments({
         category: dr.category,
         "metadata.deliveryDate": iso,
