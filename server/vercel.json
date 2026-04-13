@@ -1,19 +1,23 @@
-  {
-    "version": 2,
-    "builds": [
-        {
-            "src": "server.js",
-            "use": "@vercel/node",
-            "config": {
-                "includeFiles": [
-                    "dist/**"
-                ]
-            }
-        }
-    ],
- "routes": [
+{
+  "version": 2,
+  "builds": [
     {
-      "src": "/api/(.*)",
+      "src": "server.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "dist/**"
+        ]
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/favicon.ico",
+      "dest": "server.js"
+    },
+    {
+      "src": "/(.*)",
       "dest": "server.js"
     }
   ]

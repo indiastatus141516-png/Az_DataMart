@@ -23,11 +23,11 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Credentials", "true");
   res.header(
     "Access-Control-Allow-Methods",
-    "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS"
+    "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
   );
   res.header(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With, X-Client-Id"
+    "Content-Type, Authorization, X-Requested-With, X-Client-Id",
   );
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
@@ -36,6 +36,10 @@ app.use((req, res, next) => {
 // Increase payload size limit to handle large JSON requests
 app.use(express.json({ limit: "30mb" })); // Accept JSON up to 10MB
 app.use(express.urlencoded({ limit: "30mb", extended: true }));
+
+app.get("/favicon.ico", (req, res) => {
+  res.status(204).end();
+});
 
 // 👇 Root Route for testing deployment
 app.get("/", (req, res) => {
@@ -75,7 +79,7 @@ mongoose
       });
       await adminUser.save();
       console.log(
-        "Default admin user created: email: admin@datamartx.com, password: admin123"
+        "Default admin user created: email: admin@datamartx.com, password: admin123",
       );
     }
 
